@@ -1,0 +1,18 @@
+name: A sound card
+description: >
+  A sound card for the suites that open the machine's own output (ClickPlayer's), on a hosted Linux runner, which has
+  none: ALSA's dummy driver (snd-dummy, from the kernel's extra modules), a card with no hardware behind it whose clock
+  is the kernel's timer, made the default device and opened to the job's user. RtAudio's ALSA back end runs on it as on
+  a real card - its callback thread started, the stream started, stopped and closed - so the sanitizers see it.
+runs:
+  using: composite
+  steps:
+    - name: snd-dummy
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get install -y -qq --no-install-recommends "linux-modules-extra-$(uname -r)" > /dev/null
+        sudo modprobe snd-dummy
+        sudo chmod a+rw /dev/snd/*
+        cat /proc/asound/cards
+        grep -q Dummy /proc/asound/cards || { echo "::error::snd-dummy loaded no card"; exit 1; }
