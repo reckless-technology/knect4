@@ -17,7 +17,11 @@ if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "The oldest macOS the Mac binary runs on" FORCE)
 endif()
 
-project(Knect4 VERSION 2.0.0 LANGUAGES C CXX)
+# The version, MAJOR.MINOR.BUILD, from the nearest vMAJOR.MINOR tag and the commits since it (cmake/knect4_version.cmake).
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(knect4_version)
+
+project(Knect4 VERSION ${KNECT4_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,6 +44,29 @@ endif()
 option(KNECT4_BUILD_TESTS "Build the test suites" ON)
 option(KNECT4_GUI "Build the window on the toolkit submodule (external/reckless-toolkit)" ON)
 option(KNECT4_COVERAGE "Instrument the game's own code for coverage (gcc, clang or clang-cl)" OFF)
+option(KNECT4_SANITIZE "Build everything with AddressSanitizer and UndefinedBehaviorSanitizer (gcc or clang)" OFF)
+option(KNECT4_TSAN "Build everything with ThreadSanitizer (gcc or clang)" OFF)
+
+# The sanitizers on every target, the toolkit's and GoogleTest's included, so what passes between them is checked on
+# both sides. UndefinedBehaviorSanitizer's vptr check reads the type information of every polymorphic class a checked
+# call reaches, and the window's prebuilt Skia is built without it (-fno-rtti): that one check is left out, the rest
+# kept. ThreadSanitizer cannot share a process with AddressSanitizer, so it is a build of its own; it sees only what was
+# compiled under it - the game, the toolkit and RtAudio, not the prebuilt Skia, which draws on the calling thread alone.
+if(KNECT4_SANITIZE AND KNECT4_TSAN)
+    message(FATAL_ERROR "KNECT4_SANITIZE and KNECT4_TSAN are separate builds: ThreadSanitizer cannot run beside "
+                        "AddressSanitizer")
+endif()
+if((KNECT4_SANITIZE OR KNECT4_TSAN) AND KNECT4_MSVC_FRONTEND)
+    message(FATAL_ERROR "KNECT4_SANITIZE and KNECT4_TSAN are for gcc and clang")
+endif()
+if(KNECT4_SANITIZE)
+    add_compile_options(-fsanitize=address,undefined -fno-sanitize=vptr -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined -fno-sanitize=vptr)
+endif()
+if(KNECT4_TSAN)
+    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=thread)
+endif()
 
 # The strict warning set on every compiler, for the game's own targets. Not errors: a new compiler must not break the
 # build; the code is kept warning-free on gcc, clang and MSVC, and CI's logs are the check.
@@ -120,4 +147,18 @@ endif()
 add_subdirectory(src)
 if(KNECT4_BUILD_TESTS)
     add_subdirectory(tests)
+endif()
+
+# THIRD-PARTY-NOTICES.txt as tools/third_party_notices.py writes it from this tree's fetches and the toolkit's pins: a
+# pin that moves without the notices written again fails here. Any Python 3 runs it.
+if(KNECT4_BUILD_TESTS AND KNECT4_GUI)
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME notices
+                 COMMAND Python3::Interpreter -I "${PROJECT_SOURCE_DIR}/tools/third_party_notices.py" "${CMAKE_BINARY_DIR}"
+                         --check)
+    else()
+        message(WARNING "No Python 3 found: the test 'notices', which holds THIRD-PARTY-NOTICES.txt to the build's pins, "
+                        "is left out")
+    endif()
 endif()

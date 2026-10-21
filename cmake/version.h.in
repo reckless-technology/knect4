@@ -1,5 +1,6 @@
 #pragma once
-/// @file version.h The version every binary reports, written by CMake from project().
+/// @file version.h The version every binary reports, written by CMake from project(), whose version
+/// cmake/knect4_version.cmake reads from the tags.
 
 namespace knect4
 {

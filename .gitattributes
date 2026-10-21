@@ -1,2 +1,7 @@
 # The identity hooks are shell scripts, which a CR breaks: keep them LF wherever the clone is.
 .githooks/* text eol=lf
+# The packaging's shell scripts, likewise.
+*.sh text eol=lf
+# The licence and the notices the executable carries: the same bytes in every build.
+LICENSE text eol=lf
+THIRD-PARTY-NOTICES.txt text eol=lf

@@ -1,9 +1,11 @@
 # The window, on the toolkit: the game (Knect4) - a Windows executable with its version resource and icon, a macOS
 # .app, a Linux binary - the render tool, and the library both are made from, which the window's suite links.
 
-# The files the binary carries (the toolkit's reckless_module_assets): the series' serif, the company mark, and the
-# app's icon at 256 pixels for the window's title bar on Linux.
-reckless_module_assets(knect4_assets "icon_256.png=${PROJECT_SOURCE_DIR}/assets/icon/icon_256.png")
+# The files the binary carries (the toolkit's reckless_module_assets): the series' serif, the company mark, the app's
+# icon at 256 pixels for the window's title bar on Linux, and the game's licence and its third-party notices
+# (tools/third_party_notices.py), so the program can show them.
+reckless_module_assets(knect4_assets "icon_256.png=${PROJECT_SOURCE_DIR}/assets/icon/icon_256.png"
+    "licence.txt=${PROJECT_SOURCE_DIR}/LICENSE" "third_party_notices.txt=${PROJECT_SOURCE_DIR}/THIRD-PARTY-NOTICES.txt")
 
 add_library(knect4_gui STATIC
     board_art.cpp

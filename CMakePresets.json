@@ -45,6 +45,34 @@
             }
         },
         {
+            "name": "sanitize",
+            "displayName": "Sanitizers: address and undefined behaviour over everything, unoptimised (gcc or clang)",
+            "inherits": "base",
+            "condition": {
+                "type": "notEquals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "KNECT4_SANITIZE": "ON"
+            }
+        },
+        {
+            "name": "tsan",
+            "displayName": "ThreadSanitizer over everything, optimised a little (gcc or clang)",
+            "inherits": "base",
+            "condition": {
+                "type": "notEquals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "KNECT4_TSAN": "ON"
+            }
+        },
+        {
             "name": "coverage-windows",
             "displayName": "Coverage, Windows: the game's own code unoptimised under clang-cl, LLVM source-based",
             "inherits": "base",
@@ -75,6 +103,14 @@
             "configurePreset": "release-universal"
         },
         {
+            "name": "sanitize",
+            "configurePreset": "sanitize"
+        },
+        {
+            "name": "tsan",
+            "configurePreset": "tsan"
+        },
+        {
             "name": "coverage-windows",
             "configurePreset": "coverage-windows"
         }
@@ -99,6 +135,27 @@
             "configurePreset": "release-universal",
             "output": {
                 "outputOnFailure": true
+            }
+        },
+        {
+            "name": "sanitize",
+            "configurePreset": "sanitize",
+            "output": {
+                "outputOnFailure": true
+            },
+            "environment": {
+                "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
+                "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
+            }
+        },
+        {
+            "name": "tsan",
+            "configurePreset": "tsan",
+            "output": {
+                "outputOnFailure": true
+            },
+            "environment": {
+                "TSAN_OPTIONS": "halt_on_error=1:second_deadlock_stack=1"
             }
         },
         {
