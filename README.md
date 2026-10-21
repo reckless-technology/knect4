@@ -177,7 +177,7 @@ builds as 0.0.0, with a warning.
 
 ## CI
 
-`.github/workflows/build.yml`, on the organisation's self-hosted runners (the repository is private), on every push to
+`.github/workflows/build.yml`, on GitHub's hosted runners (`ubuntu-24.04`, `windows-2025`, `macos-15`), on every push to
 `main`, every pull request and by hand:
 
 - Windows with MSVC builds everything, runs every suite including the window's launch and the notices' check, makes the

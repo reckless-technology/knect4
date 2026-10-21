@@ -47,7 +47,7 @@ jobs:
   # Which version: the build's own rule, so the release page and the binaries agree by construction.
   verify:
     name: Version from the tags
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -58,7 +58,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: Derive MAJOR.MINOR.BUILD from the nearest vMAJOR.MINOR tag, and open the draft
         id: version
         shell: bash
@@ -135,7 +134,7 @@ jobs:
   linux:
     name: Package Linux
     needs: verify
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
       VERSION: ${{ needs.verify.outputs.version }}
@@ -143,7 +142,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: Start from nothing
         run: rm -rf build/release-ci build/release-dist build/release-out
       - name: The toolkit submodule
@@ -204,7 +202,7 @@ jobs:
   windows:
     name: Package Windows
     needs: verify
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-2025
     timeout-minutes: 120
     env:
       VERSION: ${{ needs.verify.outputs.version }}
@@ -212,7 +210,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: Start from nothing
         shell: pwsh
         run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build/release-ci, build/release-dist, build/release-out
@@ -223,7 +220,7 @@ jobs:
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
-      # SSL.com's CodeSignTool, pinned by version and hash and kept in the tool cache, and the account signed in to and
+      # SSL.com's CodeSignTool, pinned by version and hash and fetched into the tool cache, and the account signed in to and
       # its certificate listed - no signing spent - before the build rides on it. Without the secrets the installer is
       # made unsigned, and the run says so.
       - name: eSigner's signing tool, and the account checked
@@ -332,7 +329,7 @@ jobs:
   macos:
     name: Package macOS
     needs: verify
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: macos-15
     timeout-minutes: 240
     env:
       VERSION: ${{ needs.verify.outputs.version }}
@@ -340,7 +337,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: Start from nothing
         run: rm -rf build/release-ci build/release-dist build/release-out
       - name: The toolkit submodule
@@ -460,7 +456,7 @@ jobs:
     name: Check the draft
     if: needs.verify.outputs.draft == 'true'
     needs: [verify, linux, windows, macos]
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       VERSION: ${{ needs.verify.outputs.version }}

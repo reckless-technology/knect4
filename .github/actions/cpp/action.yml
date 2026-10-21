@@ -1,11 +1,12 @@
 name: C++ toolchain
 description: >
-  What every C++ job of the game needs on a self-hosted runner: on Linux g++, CMake, Ninja, the libraries the window
-  links (FreeType, fontconfig, X11 and ALSA, found by pkg-config), Xvfb for a display, python3 with venv and the Debian
-  packaging tools, installed with the runner's passwordless sudo where they are missing; on macOS Xcode's clang, CMake,
-  Ninja, lipo, vtool and the packaging tools; on Windows the MSVC developer environment of the Visual Studio vswhere
-  finds, exported to the job's later steps, and the runner's Python. On every platform a directory under the runner's
-  tool cache, keyed by compiler, where FetchContent keeps GoogleTest, Skia and the toolkit's other fetches between runs.
+  What every C++ job of the game needs on a GitHub-hosted runner, a fresh machine each job: on Linux g++, CMake,
+  Ninja, the libraries the window links (FreeType, fontconfig, X11 and ALSA, found by pkg-config), Xvfb for a display,
+  python3 with venv and the Debian packaging tools, installed with the runner's passwordless sudo where the image lacks
+  them; on macOS Xcode's clang, CMake, Homebrew's Ninja where the image has none, lipo, vtool and the packaging tools;
+  on Windows the MSVC developer environment of the Visual Studio vswhere finds, exported to the job's later steps, and
+  the runner's Python. On every platform a directory under the runner's tool cache, keyed by compiler, where
+  FetchContent puts GoogleTest, Skia and the toolkit's other fetches.
 outputs:
   deps:
     description: The FetchContent directory for this runner's compiler
@@ -49,6 +50,7 @@ runs:
           jobs=$(( mem_gb * 2 / 3 )); [ "$jobs" -gt "$(nproc)" ] && jobs=$(nproc); [ "$jobs" -lt 1 ] && jobs=1
           echo "$(nproc) cores, $mem_gb GB, $(. /etc/os-release && echo "$PRETTY_NAME"); $(g++ --version | head -1)"
         else
+          command -v ninja > /dev/null || brew install --quiet ninja
           for tool in clang cmake ninja python3 lipo vtool pkgbuild productbuild osacompile codesign; do
             command -v "$tool" > /dev/null || { echo "::error::$tool is not on the runner's PATH"; exit 1; }
           done
@@ -57,7 +59,7 @@ runs:
           echo "$(uname -m), $jobs cores, macOS $(sw_vers -productVersion); $(clang --version | head -1)"
         fi
         cmake --version | head -1; echo "ninja $(ninja --version)"; python3 --version
-        # The kept FetchContent trees of the job before this action, by compiler, so a run downloads nothing it has.
+        # The FetchContent trees, by compiler.
         deps="$RUNNER_TOOL_CACHE/knect4-deps/$compiler"
         mkdir -p "$deps"
         echo "dependencies: $deps; build jobs: $jobs"
@@ -84,7 +86,7 @@ runs:
         if (-not $python) { throw "No Python on the runner's PATH for the packaging scripts" }
         $said = & $python --version
         if ($LASTEXITCODE -ne 0 -or $said -notmatch '^Python 3\.') { throw "$python is not a Python 3 ($said)" }
-        # The kept FetchContent trees, the same folder the build job has always used.
+        # The FetchContent trees.
         $deps = Join-Path $env:RUNNER_TOOL_CACHE "knect4-deps\msvc"
         New-Item -ItemType Directory -Force -Path $deps | Out-Null
         "Visual Studio: $vs; $said at $python; dependencies: $deps; $env:NUMBER_OF_PROCESSORS cores"

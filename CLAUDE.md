@@ -49,9 +49,9 @@ outsiders can build the game core with `-DKNECT4_GUI=OFF` but not the window.
 - Every commit authored and committed as `Jonny Reckless <jonny@recklesstechnology.com>`
   (`git config core.hooksPath .githooks` installs the hooks that check it). Work on a branch, open a pull request, merge
   when CI is green.
-- CI runs on the organisation's self-hosted runners only (the repository is private): Windows, Linux (release with
-  the window under `xvfb-run`, coverage, AddressSanitizer with UndefinedBehaviorSanitizer, ThreadSanitizer) and macOS
-  universal.
+- CI runs on GitHub's hosted runners (the repository is public; `ubuntu-24.04`, `windows-2025`, `macos-15`): Windows,
+  Linux (release with the window under `xvfb-run`, coverage, AddressSanitizer with UndefinedBehaviorSanitizer,
+  ThreadSanitizer) and macOS universal.
 - The game is a consumer of the toolkit: a bump of the submodule points at a commit on the toolkit's `main` (CI checks).
 - Line coverage of `src/` stays at 95 % or more (CI's coverage job, gcc and gcovr on Linux; `tools/coverage-windows.ps1`
   on a Windows desk with clang-cl, which the Windows runners lack): every new behaviour gets a test; the views are

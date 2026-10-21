@@ -2,8 +2,8 @@ name: The toolkit submodule
 description: >
   The toolkit (reckless-technology/reckless-toolkit, a private repository) checked out at external/reckless-toolkit at
   the commit this repository pins, through the toolkit's read-only deploy key: the workflow's token reads this
-  repository alone. Made for the kept workspaces of the organisation's self-hosted runners, where a checkout is
-  clean: false - the submodule is put at the pinned commit every run whatever an earlier run left in it. With
+  repository alone. The submodule is put at the pinned commit with --force and
+  cleaned, so a workspace an earlier run left behind builds the same as a fresh one. With
   require-on-main, the pinned commit must also be on the toolkit's main: a pointer to a commit only a branch holds
   would build here and vanish there.
 inputs:

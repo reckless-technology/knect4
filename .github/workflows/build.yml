@@ -6,8 +6,8 @@ name: build
 # universal (every suite, both slices and the floor of 13.3 held; the installer package, unsigned, kept), each package
 # held to its stage as release.yml holds a release's; the game's line coverage held to 95 % (gcc on Linux); every suite
 # again under AddressSanitizer and UndefinedBehaviorSanitizer, and under ThreadSanitizer; and the C++ held to
-# clang-format 22.1.8. The repository is private, so every job runs on the organisation's self-hosted runners
-# (.github/actions/cpp provides the toolchain). The window is built on the toolkit, a private submodule read through its
+# clang-format 22.1.8. The repository is public, so every job runs on GitHub's hosted images (ubuntu-24.04,
+# windows-2025, macos-15), a fresh machine each job (.github/actions/cpp provides the toolchain). The window is built on the toolkit, a private submodule read through its
 # read-only deploy key (.github/actions/toolkit). Every checkout is whole (fetch-depth 0): the version every binary
 # reports is MAJOR.MINOR.BUILD from the nearest vMAJOR.MINOR tag (cmake/knect4_version.cmake), which a shallow clone
 # cuts off.
@@ -16,11 +16,6 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-    inputs:
-      fresh:
-        description: Build from nothing, the kept build trees removed
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -37,7 +32,7 @@ env:
 jobs:
   windows:
     name: Windows (MSVC)
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: windows-2025
     timeout-minutes: 90
     defaults:
       run:
@@ -46,17 +41,11 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: The toolkit submodule
         uses: ./.github/actions/toolkit
         with:
           deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
           require-on-main: "true"
-      - name: Tidy the workspace
-        run: |
-          if ('${{ github.event.inputs.fresh }}' -eq 'true') { 'fresh: removing the kept tree'; Remove-Item -Recurse -Force build/ci -ErrorAction SilentlyContinue }
-          if (Test-Path build/ci/CMakeCache.txt) { 'build/ci kept from the last run' } else { 'build/ci: building from nothing' }
-          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build/ci-dist, build/ci-out
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -102,21 +91,16 @@ jobs:
   # the Debian package and the tarball made as release.yml makes them, each held to the stage and kept as artifacts.
   linux:
     name: Linux (gcc)
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: The toolkit submodule
         uses: ./.github/actions/toolkit
         with:
           deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
-      - name: Tidy the workspace
-        run: |
-          if [ "${{ github.event.inputs.fresh }}" = "true" ]; then echo "fresh: removing the kept tree"; rm -rf build/ci-linux; fi
-          rm -rf build/ci-linux-dist build/ci-linux-out
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -153,21 +137,16 @@ jobs:
   # window server), then the installer package made unsigned as release.yml makes it, held to its stage and kept.
   macos:
     name: macOS (universal)
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: macos-15
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: The toolkit submodule
         uses: ./.github/actions/toolkit
         with:
           deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
-      - name: Tidy the workspace
-        run: |
-          if [ "${{ github.event.inputs.fresh }}" = "true" ]; then echo "fresh: removing the kept tree"; rm -rf build/release-universal; fi
-          rm -rf build/ci-macos-dist build/ci-macos-out
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -224,12 +203,12 @@ jobs:
 
   # Every suite under AddressSanitizer and UndefinedBehaviorSanitizer (the sanitize preset's options), the window's
   # launch on Xvfb's display, with a leak a failure - but those of the system's PipeWire ALSA plugin, which the audio
-  # suite reaches through RtAudio (tools/lsan_suppressions.txt). Kept tree build/ci-sanitize. So that a kernel's wider
+  # suite reaches through RtAudio (tools/lsan_suppressions.txt). Tree build/ci-sanitize. So that a kernel's wider
   # mmap randomisation never meets the sanitizers' fixed shadow memory, the suites run with the address space's
   # randomisation off (setarch -R), which their children inherit.
   sanitizers:
     name: Linux sanitizers (address, undefined)
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
@@ -239,7 +218,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: The toolkit submodule
         uses: ./.github/actions/toolkit
         with:
@@ -263,11 +241,11 @@ jobs:
   # Every suite under ThreadSanitizer (the tsan preset's options), its own build since it cannot share a process with
   # AddressSanitizer: the click mixer between the window's thread and the audio thread, the computer's search on a thread
   # of its own. The prebuilt Skia is not instrumented, and draws on the calling thread alone; RtAudio's ALSA back end's
-  # own race on its stream's state is suppressed (tools/tsan_suppressions.txt). Kept tree build/ci-tsan; randomisation
+  # own race on its stream's state is suppressed (tools/tsan_suppressions.txt). Tree build/ci-tsan; randomisation
   # off as above.
   tsan:
     name: Linux sanitizer (thread)
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/tools/tsan_suppressions.txt:print_suppressions=1
@@ -275,7 +253,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: The toolkit submodule
         uses: ./.github/actions/toolkit
         with:
@@ -299,16 +276,15 @@ jobs:
   # Line coverage of the game's own code (src/ but the app's entry point), gcc's, read by gcovr 8.3: a debug build
   # instrumented, every suite and the render tool's runs on Linux, red under 95 % of lines. The window's launch is left
   # to the jobs that build the game as it ships; on a desk, tools/coverage-windows.ps1 measures the same with clang-cl.
-  # Kept tree build/ci-coverage; its counters cleared before every run.
+  # Tree build/ci-coverage; its counters cleared before every run.
   coverage:
     name: Coverage (Linux, gcc)
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          clean: false
       - name: The toolkit submodule
         uses: ./.github/actions/toolkit
         with:
@@ -316,7 +292,7 @@ jobs:
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
-      # gcovr in a venv of the tool cache.
+      # gcovr in a venv of its own.
       - name: gcovr 8.3
         id: gcovr
         run: |
@@ -354,12 +330,11 @@ jobs:
 
   format:
     name: clang-format
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with:
-          clean: false
       - name: clang-format 22.1.8
         run: |
           venv="$RUNNER_TOOL_CACHE/clang-format-22.1.8"
