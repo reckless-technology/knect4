@@ -1,9 +1,16 @@
 name: build
 
-# Knect 4 built on Windows with MSVC, its suites run (the window's launch among them), and Knect4.exe kept as the
-# run's artifact; its line coverage held to 95 %; and the C++ held to clang-format 22.1.8. The repository is private,
-# so the jobs run on the organisation's self-hosted runners. The window is built on the toolkit, a private submodule
-# read through its read-only deploy key (.github/actions/toolkit).
+# Knect 4 built, tested and packaged on every push to main, every pull request and on demand: Windows with MSVC (every
+# suite, the window's launch among them; Knect4.exe and the installer, unsigned, kept as the run's artifacts), Linux
+# with gcc (every suite, the window's launch on Xvfb's display; the Debian package and the tarball, kept), macOS
+# universal (every suite, both slices and the floor of 13.3 held; the installer package, unsigned, kept), each package
+# held to its stage as release.yml holds a release's; the game's line coverage held to 95 % (gcc on Linux); every suite
+# again under AddressSanitizer and UndefinedBehaviorSanitizer, and under ThreadSanitizer; and the C++ held to
+# clang-format 22.1.8. The repository is private, so every job runs on the organisation's self-hosted runners
+# (.github/actions/cpp provides the toolchain). The window is built on the toolkit, a private submodule read through its
+# read-only deploy key (.github/actions/toolkit). Every checkout is whole (fetch-depth 0): the version every binary
+# reports is MAJOR.MINOR.BUILD from the nearest vMAJOR.MINOR tag (cmake/knect4_version.cmake), which a shallow clone
+# cuts off.
 on:
   push:
     branches: [main]
@@ -11,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       fresh:
-        description: Build from nothing, the kept build tree removed
+        description: Build from nothing, the kept build trees removed
         type: boolean
         default: false
 
@@ -23,17 +30,22 @@ concurrency:
   # A newer push to a pull request supersedes its run; every commit on main keeps a result of its own.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# No suite or launch reaches the network for an update check.
+env:
+  RECKLESS_UPDATE_CHECK: "off"
+
 jobs:
   windows:
     name: Windows (MSVC)
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 60
+    timeout-minutes: 90
     defaults:
       run:
         shell: pwsh
     steps:
       - uses: actions/checkout@v5
         with:
+          fetch-depth: 0
           clean: false
       - name: The toolkit submodule
         uses: ./.github/actions/toolkit
@@ -44,36 +56,33 @@ jobs:
         run: |
           if ('${{ github.event.inputs.fresh }}' -eq 'true') { 'fresh: removing the kept tree'; Remove-Item -Recurse -Force build/ci -ErrorAction SilentlyContinue }
           if (Test-Path build/ci/CMakeCache.txt) { 'build/ci kept from the last run' } else { 'build/ci: building from nothing' }
-      # The MSVC developer environment of the Visual Studio vswhere finds, for the later steps; FetchContent's downloads
-      # kept in the runner's tool cache between runs, by compiler.
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build/ci-dist, build/ci-out
       - name: Toolchain
         id: cpp
-        run: |
-          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if (-not $vs) { throw "No Visual Studio with the x64 C++ tools found" }
-          $before = @{}
-          Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
-          $devcmd = Join-Path $vs 'Common7\Tools\VsDevCmd.bat'
-          cmd.exe /c "`"$devcmd`" -arch=x64 -host_arch=x64 -no_logo && set" | ForEach-Object {
-            if ($_ -match '^([^=]+)=(.*)$' -and $before[$Matches[1]] -ne $Matches[2]) {
-              "$($Matches[1])=$($Matches[2])" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-            }
-          }
-          $deps = Join-Path $env:RUNNER_TOOL_CACHE "knect4-deps\msvc"
-          New-Item -ItemType Directory -Force -Path $deps | Out-Null
-          "Visual Studio: $vs; dependencies: $deps"
-          "deps=$deps" >> $env:GITHUB_OUTPUT
+        uses: ./.github/actions/cpp
       - name: Configure
         run: >
           cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
-          "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}"
+          "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}" "-DPython3_EXECUTABLE=${{ steps.cpp.outputs.python }}"
       - name: Build
-        run: cmake --build build/ci -j $env:NUMBER_OF_PROCESSORS
-      # Every suite: the game's (its search held to the original's own games), the window's, and the window's launch,
-      # which the runner's service draws on a window station that shows nothing.
+        run: cmake --build build/ci -j ${{ steps.cpp.outputs.jobs }}
+      # Every suite: the game's (its search held to the original's own games), the window's, the window's launch, which
+      # the runner's service draws on a window station that shows nothing, and the third-party notices held to the pins.
       - name: Test
         run: ctest --test-dir build/ci --output-on-failure -j $env:NUMBER_OF_PROCESSORS
+      # The installer, unsigned, as release.yml makes it: the stage, the installer kept as an artifact, and a test build
+      # of it installed for the runner's account under a folder of its own, every file checked at its place, the game
+      # launched from there, upgraded and uninstalled with a sibling product's folder left as it was.
+      - name: Package (the stage and the installer, installed and taken away)
+        run: |
+          $version = (Select-String -Path build/ci/generated/version.h -Pattern 'kVersion = "(.*)"').Matches[0].Groups[1].Value
+          "version $version"
+          & "${{ steps.cpp.outputs.python }}" -I packaging/stage.py build/ci build/ci-dist windows
+          if ($LASTEXITCODE -ne 0) { throw "the stage failed" }
+          pwsh -NoProfile -File packaging/windows/make_installer.ps1 -DistDir build/ci-dist -Version $version -OutDir build/ci-out -Fetch
+          if ($LASTEXITCODE -ne 0) { throw "the installer was not made" }
+          pwsh -NoProfile -File packaging/windows/test_installer.ps1 -DistDir build/ci-dist -Version $version
+          if ($LASTEXITCODE -ne 0) { throw "the installer's test failed" }
       - name: Upload the executable
         uses: actions/upload-artifact@v6
         with:
@@ -81,11 +90,213 @@ jobs:
           path: build/ci/src/app/Knect4.exe
           if-no-files-found: error
           retention-days: 30
+      - name: Upload the installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: knect4-windows-installer
+          path: build/ci-out/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  # The game's Linux build as it ships: Release with gcc, every suite, the window's launch on a display of Xvfb's, then
+  # the Debian package and the tarball made as release.yml makes them, each held to the stage and kept as artifacts.
+  linux:
+    name: Linux (gcc)
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          clean: false
+      - name: The toolkit submodule
+        uses: ./.github/actions/toolkit
+        with:
+          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
+      - name: Tidy the workspace
+        run: |
+          if [ "${{ github.event.inputs.fresh }}" = "true" ]; then echo "fresh: removing the kept tree"; rm -rf build/ci-linux; fi
+          rm -rf build/ci-linux-dist build/ci-linux-out
+      - name: Toolchain
+        id: cpp
+        uses: ./.github/actions/cpp
+      - name: Configure
+        run: >
+          cmake -S . -B build/ci-linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
+          "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}"
+      - name: Build
+        run: cmake --build build/ci-linux -j ${{ steps.cpp.outputs.jobs }}
+      - name: Test
+        run: ctest --test-dir build/ci-linux --output-on-failure -j "$(nproc)" -LE '^window$'
+      # The window's launch (label window, app_smoke) on a display of its own.
+      - name: Test the window on a display (xvfb-run)
+        run: xvfb-run -a -s "-screen 0 1600x1200x24" ctest --test-dir build/ci-linux --output-on-failure -L '^window$'
+      - name: Package (the stage, the Debian package and the tarball)
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/.*kVersion = "\(.*\)".*/\1/p' build/ci-linux/generated/version.h)
+          echo "version $version"
+          python3 -I packaging/stage.py build/ci-linux build/ci-linux-dist linux
+          packaging/linux/make_tarball.sh build/ci-linux-dist "$version" "build/ci-linux-out/knect4-$version-linux-x64.tar.xz"
+          packaging/linux/make_deb.sh build/ci-linux-dist "$version" "build/ci-linux-out/knect4-$version-linux-amd64.deb"
+          packaging/linux/test_deb.sh build/ci-linux-dist "$version" "build/ci-linux-out/knect4-$version-linux-amd64.deb"
+      - name: Upload the packages
+        uses: actions/upload-artifact@v6
+        with:
+          name: knect4-linux
+          path: build/ci-linux-out/*
+          if-no-files-found: error
+          retention-days: 30
+
+  # One binary for Apple silicon and Intel (the release-universal preset), for macOS 13.3 on, on the Apple silicon
+  # runner: every binary held to both slices and the floor, every suite natively (the window's launch on the runner's
+  # window server), then the installer package made unsigned as release.yml makes it, held to its stage and kept.
+  macos:
+    name: macOS (universal)
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          clean: false
+      - name: The toolkit submodule
+        uses: ./.github/actions/toolkit
+        with:
+          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
+      - name: Tidy the workspace
+        run: |
+          if [ "${{ github.event.inputs.fresh }}" = "true" ]; then echo "fresh: removing the kept tree"; rm -rf build/release-universal; fi
+          rm -rf build/ci-macos-dist build/ci-macos-out
+      - name: Toolchain
+        id: cpp
+        uses: ./.github/actions/cpp
+      - name: Configure
+        run: >
+          cmake --preset release-universal -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
+          "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}"
+      - name: Build
+        run: cmake --build --preset release-universal -j ${{ steps.cpp.outputs.jobs }}
+      - name: Every binary holds arm64 and x86_64, for macOS 13.3 on
+        run: |
+          set -euo pipefail
+          tree=build/release-universal
+          for binary in "$tree/src/app/Knect4.app/Contents/MacOS/Knect4" "$tree/src/app/knect4_render" \
+                        "$tree/tests/knect4_game_test" "$tree/tests/app/knect4_app_test"; do
+            lipo -info "$binary"
+            for arch in arm64 x86_64; do lipo "$binary" -verify_arch "$arch"; done
+            minos=$(vtool -show-build "$binary" | awk '/minos/ {print $2}' | sort -u)
+            [ "$minos" = 13.3 ] || { echo "::error::$binary is for macOS $minos, not 13.3"; exit 1; }
+          done
+      # The bundle as the system checks it: signed whole (ad hoc, by the build), its plist naming the icon it carries -
+      # assets/icon/icon.icns byte for byte - and asking for nothing the game does not use (no microphone).
+      - name: The app's bundle
+        run: |
+          set -euo pipefail
+          app=build/release-universal/src/app/Knect4.app
+          codesign --verify --deep --strict "$app"
+          icon=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$app/Contents/Info.plist")
+          cmp "$app/Contents/Resources/$icon" assets/icon/icon.icns ||
+            { echo "::error::the bundle's $icon, which its plist names, is not assets/icon/icon.icns"; exit 1; }
+          if /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$app/Contents/Info.plist" 2> /dev/null; then
+            echo "::error::the plist asks for the microphone"; exit 1
+          fi
+      - name: Test
+        run: ctest --preset release-universal -j "$(sysctl -n hw.ncpu)"
+      # The x86_64 slice run too, under Rosetta 2: the game's suite.
+      - name: Test the Intel slice (Rosetta 2)
+        run: arch -x86_64 build/release-universal/tests/knect4_game_test --gtest_brief=1
+      - name: Package (the stage and the installer)
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/.*kVersion = "\(.*\)".*/\1/p' build/release-universal/generated/version.h)
+          echo "version $version"
+          python3 -I packaging/stage.py build/release-universal build/ci-macos-dist macos
+          packaging/macos/make_installer.sh build/ci-macos-dist "$version" "build/ci-macos-out/knect4-$version-macos.pkg"
+          packaging/macos/test_installer.sh build/ci-macos-dist "$version" "build/ci-macos-out/knect4-$version-macos.pkg"
+      - name: Upload the installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: knect4-macos
+          path: build/ci-macos-out/*.pkg
+          if-no-files-found: error
+          retention-days: 30
+
+  # Every suite under AddressSanitizer and UndefinedBehaviorSanitizer (the sanitize preset's options), the window's
+  # launch on Xvfb's display, with a leak a failure. Kept tree build/ci-sanitize. The runners' kernels randomise mmap
+  # more widely than the sanitizers' shadow memory allows, so the suites run with the address space's randomisation off
+  # (setarch -R), which their children inherit.
+  sanitizers:
+    name: Linux sanitizers (address, undefined)
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 90
+    env:
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          clean: false
+      - name: The toolkit submodule
+        uses: ./.github/actions/toolkit
+        with:
+          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
+      - name: Toolchain
+        id: cpp
+        uses: ./.github/actions/cpp
+      - name: Configure
+        run: >
+          cmake -S . -B build/ci-sanitize -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKNECT4_SANITIZE=ON
+          -DFETCHCONTENT_UPDATES_DISCONNECTED=ON "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}"
+      - name: Build
+        run: cmake --build build/ci-sanitize -j ${{ steps.cpp.outputs.jobs }}
+      - name: Test
+        run: setarch "$(uname -m)" -R ctest --test-dir build/ci-sanitize --output-on-failure -j "$(nproc)" -LE '^window$'
+      - name: Test the window on a display (xvfb-run)
+        run: >
+          setarch "$(uname -m)" -R xvfb-run -a -s "-screen 0 1600x1200x24"
+          ctest --test-dir build/ci-sanitize --output-on-failure -L '^window$'
+
+  # Every suite under ThreadSanitizer (the tsan preset's options), its own build since it cannot share a process with
+  # AddressSanitizer: the click mixer between the window's thread and the audio thread, the computer's search on a thread
+  # of its own. The prebuilt Skia is not instrumented, and draws on the calling thread alone. Kept tree build/ci-tsan;
+  # randomisation off as above.
+  tsan:
+    name: Linux sanitizer (thread)
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 90
+    env:
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          clean: false
+      - name: The toolkit submodule
+        uses: ./.github/actions/toolkit
+        with:
+          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
+      - name: Toolchain
+        id: cpp
+        uses: ./.github/actions/cpp
+      - name: Configure
+        run: >
+          cmake -S . -B build/ci-tsan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKNECT4_TSAN=ON
+          -DFETCHCONTENT_UPDATES_DISCONNECTED=ON "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}"
+      - name: Build
+        run: cmake --build build/ci-tsan -j ${{ steps.cpp.outputs.jobs }}
+      - name: Test
+        run: setarch "$(uname -m)" -R ctest --test-dir build/ci-tsan --output-on-failure -j "$(nproc)" -LE '^window$'
+      - name: Test the window on a display (xvfb-run)
+        run: >
+          setarch "$(uname -m)" -R xvfb-run -a -s "-screen 0 1600x1200x24"
+          ctest --test-dir build/ci-tsan --output-on-failure -L '^window$'
 
   # Line coverage of the game's own code (src/ but the app's entry point), gcc's, read by gcovr 8.3: a debug build
   # instrumented, every suite and the render tool's runs on Linux, red under 95 % of lines. The window's launch is left
-  # to the Windows job (it needs a display); on a desk, tools/coverage-windows.ps1 measures the same with clang-cl.
-  # This is also the game's own Linux build. Kept tree build/ci-coverage; its counters cleared before every run.
+  # to the jobs that build the game as it ships; on a desk, tools/coverage-windows.ps1 measures the same with clang-cl.
+  # Kept tree build/ci-coverage; its counters cleared before every run.
   coverage:
     name: Coverage (Linux, gcc)
     runs-on: [self-hosted, Linux, X64]
@@ -93,37 +304,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          fetch-depth: 0
           clean: false
       - name: The toolkit submodule
         uses: ./.github/actions/toolkit
         with:
           deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
-      # What the build needs - the compiler, CMake, Ninja, and what Skia, the child window and ALSA link - looked up by
-      # name, installed with the runner's passwordless sudo where missing; gcovr in a venv of the tool cache.
       - name: Toolchain
         id: cpp
+        uses: ./.github/actions/cpp
+      # gcovr in a venv of the tool cache.
+      - name: gcovr 8.3
+        id: gcovr
         run: |
-          set -euo pipefail
-          apt_line="build-essential cmake ninja-build pkg-config python3-venv libfreetype-dev libfontconfig1-dev libx11-dev libasound2-dev"
-          find_missing() {
-            missing=""
-            for tool in g++ cmake ninja pkg-config python3; do command -v "$tool" > /dev/null || missing="$missing $tool"; done
-            for package in freetype2 fontconfig x11 alsa; do pkg-config --exists "$package" 2> /dev/null || missing="$missing $package.pc"; done
-          }
-          find_missing
-          if [ -n "$missing" ] && sudo -n true 2> /dev/null; then
-            echo "the runner lacks:$missing - installing"
-            sudo -n apt-get update -qq
-            sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $apt_line
-            find_missing
-          fi
-          if [ -n "$missing" ]; then echo "::error::the runner lacks:$missing. sudo apt install $apt_line"; exit 1; fi
           gcovr="$RUNNER_TOOL_CACHE/gcovr-8.3"
           if [ ! -x "$gcovr/bin/gcovr" ]; then python3 -m venv "$gcovr" && "$gcovr/bin/pip" install --quiet gcovr==8.3; fi
-          deps="$RUNNER_TOOL_CACHE/knect4-deps/gcc$(g++ -dumpversion | cut -d. -f1)"
-          mkdir -p "$deps"
-          g++ --version | head -1
-          { echo "gcovr=$gcovr/bin/gcovr"; echo "deps=$deps"; echo "jobs=$(nproc)"; } >> "$GITHUB_OUTPUT"
+          echo "gcovr=$gcovr/bin/gcovr" >> "$GITHUB_OUTPUT"
       - name: Configure
         run: >
           cmake -S . -B build/ci-coverage -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKNECT4_COVERAGE=ON
@@ -137,7 +333,7 @@ jobs:
       - name: Coverage, 95 % of lines or red
         run: >
           mkdir -p build/ci-coverage/coverage &&
-          "${{ steps.cpp.outputs.gcovr }}" --root . --filter 'src/' --exclude 'src/app/main[.]cpp' build/ci-coverage
+          "${{ steps.gcovr.outputs.gcovr }}" --root . --filter 'src/' --exclude 'src/app/main[.]cpp' build/ci-coverage
           --gcov-ignore-parse-errors=negative_hits.warn_once_per_file
           --print-summary --txt build/ci-coverage/coverage.txt --html-details build/ci-coverage/coverage/index.html
           --fail-under-line 95

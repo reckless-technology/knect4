@@ -1,0 +1,93 @@
+name: C++ toolchain
+description: >
+  What every C++ job of the game needs on a self-hosted runner: on Linux g++, CMake, Ninja, the libraries the window
+  links (FreeType, fontconfig, X11 and ALSA, found by pkg-config), Xvfb for a display, python3 with venv and the Debian
+  packaging tools, installed with the runner's passwordless sudo where they are missing; on macOS Xcode's clang, CMake,
+  Ninja, lipo, vtool and the packaging tools; on Windows the MSVC developer environment of the Visual Studio vswhere
+  finds, exported to the job's later steps, and the runner's Python. On every platform a directory under the runner's
+  tool cache, keyed by compiler, where FetchContent keeps GoogleTest, Skia and the toolkit's other fetches between runs.
+outputs:
+  deps:
+    description: The FetchContent directory for this runner's compiler
+    value: ${{ steps.unix.outputs.deps || steps.windows.outputs.deps }}
+  jobs:
+    description: The build's parallelism for this runner
+    value: ${{ steps.unix.outputs.jobs || steps.windows.outputs.jobs }}
+  python:
+    description: The Python 3 the packaging scripts run with
+    value: ${{ steps.unix.outputs.python || steps.windows.outputs.python }}
+runs:
+  using: composite
+  steps:
+    - name: Toolchain (Linux, macOS)
+      if: runner.os != 'Windows'
+      id: unix
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "$(uname -s)" = "Linux" ]; then
+          apt_line="build-essential cmake ninja-build pkg-config python3-venv libfreetype-dev libfontconfig1-dev libx11-dev libasound2-dev xvfb xauth desktop-file-utils"
+          find_missing() {
+            missing=""
+            for tool in g++ cmake ninja pkg-config python3 xvfb-run xauth objdump dpkg-deb desktop-file-validate; do
+              command -v "$tool" > /dev/null || missing="$missing $tool"
+            done
+            python3 -c 'import venv, ensurepip' 2> /dev/null || missing="$missing python3-venv"
+            for package in freetype2 fontconfig x11 alsa; do pkg-config --exists "$package" 2> /dev/null || missing="$missing $package.pc"; done
+          }
+          find_missing
+          if [ -n "$missing" ] && sudo -n true 2> /dev/null; then
+            echo "the runner lacks:$missing - installing with the runner's passwordless sudo"
+            sudo -n apt-get update -qq
+            sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $apt_line
+            find_missing
+          fi
+          if [ -n "$missing" ]; then echo "::error::the runner lacks:$missing. sudo apt install $apt_line"; exit 1; fi
+          compiler="gcc$(g++ -dumpversion | cut -d. -f1)"
+          mem_gb=$(( $(grep MemTotal /proc/meminfo | awk '{print $2}') / 1048576 ))
+          # A job per two thirds of a gigabyte, never more than the cores.
+          jobs=$(( mem_gb * 2 / 3 )); [ "$jobs" -gt "$(nproc)" ] && jobs=$(nproc); [ "$jobs" -lt 1 ] && jobs=1
+          echo "$(nproc) cores, $mem_gb GB, $(. /etc/os-release && echo "$PRETTY_NAME"); $(g++ --version | head -1)"
+        else
+          for tool in clang cmake ninja python3 lipo vtool pkgbuild productbuild osacompile codesign; do
+            command -v "$tool" > /dev/null || { echo "::error::$tool is not on the runner's PATH"; exit 1; }
+          done
+          compiler="appleclang$(clang --version | sed -nE '1s/.*version ([0-9]+).*/\1/p')"
+          jobs=$(sysctl -n hw.ncpu)
+          echo "$(uname -m), $jobs cores, macOS $(sw_vers -productVersion); $(clang --version | head -1)"
+        fi
+        cmake --version | head -1; echo "ninja $(ninja --version)"; python3 --version
+        # The kept FetchContent trees of the job before this action, by compiler, so a run downloads nothing it has.
+        deps="$RUNNER_TOOL_CACHE/knect4-deps/$compiler"
+        mkdir -p "$deps"
+        echo "dependencies: $deps; build jobs: $jobs"
+        { echo "deps=$deps"; echo "jobs=$jobs"; echo "python=$(command -v python3)"; } >> "$GITHUB_OUTPUT"
+
+    - name: Toolchain (Windows)
+      if: runner.os == 'Windows'
+      id: windows
+      shell: pwsh
+      run: |
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+        $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        if (-not $vs) { throw "No Visual Studio with the x64 C++ tools found" }
+        $before = @{}
+        Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+        $devcmd = Join-Path $vs 'Common7\Tools\VsDevCmd.bat'
+        cmd.exe /c "`"$devcmd`" -arch=x64 -host_arch=x64 -no_logo && set" | ForEach-Object {
+          if ($_ -match '^([^=]+)=(.*)$' -and $before[$Matches[1]] -ne $Matches[2]) {
+            "$($Matches[1])=$($Matches[2])" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          }
+        }
+        # The packaging scripts' Python: the runner's machine-wide Python 3.
+        $python = (Get-Command python -ErrorAction SilentlyContinue).Source
+        if (-not $python) { throw "No Python on the runner's PATH for the packaging scripts" }
+        $said = & $python --version
+        if ($LASTEXITCODE -ne 0 -or $said -notmatch '^Python 3\.') { throw "$python is not a Python 3 ($said)" }
+        # The kept FetchContent trees, the same folder the build job has always used.
+        $deps = Join-Path $env:RUNNER_TOOL_CACHE "knect4-deps\msvc"
+        New-Item -ItemType Directory -Force -Path $deps | Out-Null
+        "Visual Studio: $vs; $said at $python; dependencies: $deps; $env:NUMBER_OF_PROCESSORS cores"
+        "deps=$deps" >> $env:GITHUB_OUTPUT
+        "jobs=$env:NUMBER_OF_PROCESSORS" >> $env:GITHUB_OUTPUT
+        "python=$python" >> $env:GITHUB_OUTPUT

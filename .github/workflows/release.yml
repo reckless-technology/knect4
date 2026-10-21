@@ -1,0 +1,485 @@
+name: release
+
+# One release of Knect 4, left a private draft. Push a tag vMAJOR.MINOR (v2.0) and the game is built from nothing,
+# tested and packaged on Linux, Windows and macOS, and a draft GitHub release vMAJOR.MINOR.0 is made with an installer
+# for each platform and the Linux tarball. Run the workflow by hand (workflow_dispatch) and the same happens at the head
+# of main, as vMAJOR.MINOR.BUILD where BUILD is the number of commits since the nearest vMAJOR.MINOR tag - the version
+# the binaries report (cmake/knect4_version.cmake). Releases are cut from main and nowhere else: verify refuses a
+# dispatch on another branch and a tag on a commit main does not hold, before anything is built. A dry run (dispatch
+# with dry_run) builds, tests, signs where it can and packages exactly as a release does, on any branch and with no
+# version mark at all (as 0.0.0), and makes no draft: its files are kept as the run's artifacts for a day.
+#
+# The release stays a draft: verify opens it before anything is built (its tag vMAJOR.MINOR.BUILD named on the draft and
+# made by GitHub only when someone publishes it), each package job uploads its files straight onto it, and the last job
+# checks all four are there. Nothing here publishes a release, pushes a tag or copies a release anywhere else; that is
+# done by hand. A draft of the same version left by an earlier run is replaced; a published release of it stops the run.
+#
+# Signing, with the organisation's secrets where this repository has them, and unsigned with a warning where it does
+# not: on Windows the installer and its uninstaller through SSL.com's eSigner (CodeSignTool by hash, the toolkit's
+# tools/esigner-sign.ps1; the account checked before the build, which spends no signing) whenever ESIGNER_USERNAME is
+# set; on macOS the app with the Developer ID Application identity and the hardened runtime (packaging/macos/sign.sh),
+# the installer with the Developer ID Installer identity, notarised by Apple and stapled (the toolkit's
+# tools/sign-mac.sh on a keychain of the job's own) whenever MACOS_DEVELOPER_ID_APPLICATION_P12 is set.
+on:
+  push:
+    tags: ['v[0-9]*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build, test, sign where it can and package only; make no draft"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write       # create the draft release and upload its files
+
+# One release run at a time: a tag push and a dispatch at once would each open and replace drafts under the other. A run
+# waits for the one in progress rather than cancel it, which could leave a half-uploaded draft behind.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+# No suite or launch reaches the network for an update check.
+env:
+  RECKLESS_UPDATE_CHECK: "off"
+
+jobs:
+  # Which version: the build's own rule, so the release page and the binaries agree by construction.
+  verify:
+    name: Version from the tags
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      draft: ${{ steps.version.outputs.draft }}
+      release_id: ${{ steps.version.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          clean: false
+      - name: Derive MAJOR.MINOR.BUILD from the nearest vMAJOR.MINOR tag, and open the draft
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            if ! echo "$GITHUB_REF_NAME" | grep -qE '^v[0-9]+\.[0-9]+$'; then
+              echo "::error::Tag $GITHUB_REF_NAME is not vMAJOR.MINOR. Version marks have two components."
+              exit 1
+            fi
+          fi
+          # main and nowhere else for a draft: a dispatch has to run on main, and a tag has to sit on a commit main
+          # already holds. A dry run, which makes no draft, may run on any branch.
+          is_dry_run=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            is_dry_run=true
+          fi
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if [ "$is_dry_run" = false ]; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "::error::Releases are cut from main; this dispatch ran on $GITHUB_REF."
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              echo "::error::Commit $GITHUB_SHA is not on main; releases are cut from main only."
+              exit 1
+            fi
+          fi
+          describe=$(git describe --tags --long --match 'v[0-9]*.[0-9]*' --exclude 'v*.*.*' 2> /dev/null || true)
+          if echo "$describe" | grep -qE '^v[0-9]+\.[0-9]+-[0-9]+-g[0-9a-f]+$'; then
+            mark="${describe%%-*}"                 # v2.0
+            rest="${describe#*-}"; build="${rest%%-*}"
+            version="${mark#v}.$build"             # 2.0.7
+          elif [ "$is_dry_run" = true ]; then
+            echo "::warning::No vMAJOR.MINOR tag is reachable from $GITHUB_SHA: the dry run builds as 0.0.0, as the build does"
+            version=0.0.0
+          else
+            echo "::error::No vMAJOR.MINOR tag is reachable from $GITHUB_SHA (git describe: '$describe'). Tag main vMAJOR.MINOR and push the tag."
+            exit 1
+          fi
+          tag="v$version"
+          draft=true
+          [ "$is_dry_run" = true ] && draft=false
+          release_id=""
+          if [ "$draft" = "true" ]; then
+            if is_draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2> /dev/null); then
+              if [ "$is_draft" = "true" ]; then
+                echo "A draft of $tag is left from an earlier run; replacing it"
+                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes
+              else
+                echo "::error::Release $tag is already published: this commit has been released. Push a commit (the build number moves on) or a new vMAJOR.MINOR tag."
+                exit 1
+              fi
+            fi
+            # Through the REST API, whose answer carries the draft's numeric id - what the package jobs upload to,
+            # since a draft's tag does not exist until it is published.
+            body="Knect 4 $version, built from $GITHUB_SHA by run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. A draft: the package jobs say whether each installer is signed."
+            release_id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" \
+              -f name="Knect 4 v$version" -F draft=true -f body="$body" --jq .id)
+            echo "draft release $tag opened: id $release_id"
+          fi
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "draft=$draft"
+            echo "release_id=$release_id"
+          } >> "$GITHUB_OUTPUT"
+          echo "Knect 4 $version ($describe); draft=$draft"
+
+  # Linux, with gcc, in a tree built from nothing: every suite (the window's launch on Xvfb's display), the version, then
+  # the stage, the tarball and the Debian package, each held to the stage.
+  linux:
+    name: Package Linux
+    needs: verify
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 120
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          clean: false
+      - name: Start from nothing
+        run: rm -rf build/release-ci build/release-dist build/release-out
+      - name: The toolkit submodule
+        uses: ./.github/actions/toolkit
+        with:
+          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
+      - name: Toolchain
+        id: cpp
+        uses: ./.github/actions/cpp
+      - name: Configure
+        run: |
+          # The configure's own status decides the step, not tee's, which succeeds whatever came down the pipe.
+          set -o pipefail
+          mkdir -p build
+          cmake -S . -B build/release-ci -G Ninja -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_UPDATES_DISCONNECTED=ON \
+            "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}" | tee build/configure.log
+          grep -q "Knect 4 $VERSION" build/configure.log || { echo "::error::the configure does not report $VERSION"; exit 1; }
+      - name: Build
+        run: cmake --build build/release-ci -j ${{ steps.cpp.outputs.jobs }}
+      - name: Test
+        run: ctest --test-dir build/release-ci --output-on-failure -j "$(nproc)" -LE '^window$'
+      - name: Test the window on a display (xvfb-run)
+        run: xvfb-run -a -s "-screen 0 1600x1200x24" ctest --test-dir build/release-ci --output-on-failure -L '^window$'
+      - name: Package
+        run: |
+          set -euo pipefail
+          grep -q "kVersion = \"$VERSION\"" build/release-ci/generated/version.h || { echo "::error::the binary does not carry $VERSION"; exit 1; }
+          python3 -I packaging/stage.py build/release-ci build/release-dist linux
+          packaging/linux/make_tarball.sh build/release-dist "$VERSION" "build/release-out/knect4-$VERSION-linux-x64.tar.xz"
+          packaging/linux/make_deb.sh build/release-dist "$VERSION" "build/release-out/knect4-$VERSION-linux-amd64.deb"
+          packaging/linux/test_deb.sh build/release-dist "$VERSION" "build/release-out/knect4-$VERSION-linux-amd64.deb"
+          ls -l build/release-out
+      - name: Upload to the draft release
+        if: needs.verify.outputs.draft == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.verify.outputs.release_id }}
+        run: |
+          for file in build/release-out/*; do
+            name=$(basename "$file")
+            curl --fail-with-body --silent --show-error -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/octet-stream" --data-binary "@$file" \
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$name" \
+              | grep -o '"browser_download_url": *"[^"]*"'
+          done
+      - uses: actions/upload-artifact@v6
+        if: needs.verify.outputs.draft != 'true'
+        continue-on-error: true
+        with:
+          name: knect4-linux
+          path: build/release-out/*
+          retention-days: 1
+
+  # Windows, with MSVC, in a tree built from nothing: every suite, the stage, the installer - signed where the eSigner
+  # secrets are set and its signature held to Jonathan Reckless's - and a test build of it installed, checked file by
+  # file, launched, upgraded and uninstalled.
+  windows:
+    name: Package Windows
+    needs: verify
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 120
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          clean: false
+      - name: Start from nothing
+        shell: pwsh
+        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build/release-ci, build/release-dist, build/release-out
+      - name: The toolkit submodule
+        uses: ./.github/actions/toolkit
+        with:
+          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
+      - name: Toolchain
+        id: cpp
+        uses: ./.github/actions/cpp
+      # SSL.com's CodeSignTool, pinned by version and hash and kept in the tool cache, and the account signed in to and
+      # its certificate listed - no signing spent - before the build rides on it. Without the secrets the installer is
+      # made unsigned, and the run says so.
+      - name: eSigner's signing tool, and the account checked
+        id: esigner
+        shell: pwsh
+        env:
+          ESIGNER_USERNAME: ${{ secrets.ESIGNER_USERNAME }}
+          ESIGNER_PASSWORD: ${{ secrets.ESIGNER_PASSWORD }}
+          ESIGNER_CREDENTIAL_ID: ${{ secrets.ESIGNER_CREDENTIAL_ID }}
+        run: |
+          if (-not $env:ESIGNER_USERNAME) {
+            "::warning::no eSigner secrets in this repository: the Windows installer is unsigned"
+            "sign=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          $version = 'v1.3.2'
+          $sha256 = '4afc32e8b7f79bbe1de7e4e7049aaad4e0f754357613b9bbec0e3052f06fd36b'
+          $dir = Join-Path $env:RUNNER_TOOL_CACHE "codesigntool\$version"
+          if (-not (Test-Path (Join-Path $dir 'CodeSignTool.bat'))) {
+            $zip = Join-Path $env:RUNNER_TEMP 'codesigntool.zip'
+            Invoke-WebRequest -UseBasicParsing -OutFile $zip `
+              -Uri "https://github.com/SSLcom/CodeSignTool/releases/download/$version/CodeSignTool-$version-windows.zip"
+            $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+            if ($hash -ne $sha256) { throw "CodeSignTool $version is $hash, not the pinned $sha256" }
+            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $dir
+            Expand-Archive -Path $zip -DestinationPath $dir
+          }
+          "RECKLESS_CODESIGNTOOL=$dir" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $env:RECKLESS_CODESIGNTOOL = $dir
+          pwsh -NoProfile -File external/reckless-toolkit/tools/esigner-sign.ps1 -Check
+          if ($LASTEXITCODE -ne 0) { throw "the eSigner account is not ready to sign" }
+          "sign=true" >> $env:GITHUB_OUTPUT
+      - name: Configure
+        shell: pwsh
+        run: |
+          $out = cmake -S . -B build/release-ci -G Ninja -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_UPDATES_DISCONNECTED=ON `
+            "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}" "-DPython3_EXECUTABLE=${{ steps.cpp.outputs.python }}" | Out-String
+          $out
+          if ($LASTEXITCODE -ne 0) { throw "the configure failed" }
+          if ($out -notmatch [regex]::Escape("Knect 4 $env:VERSION")) { throw "the configure does not report $env:VERSION" }
+      - name: Build
+        run: cmake --build build/release-ci -j ${{ steps.cpp.outputs.jobs }}
+      - name: Test
+        run: ctest --test-dir build/release-ci --output-on-failure -j $env:NUMBER_OF_PROCESSORS
+      - name: The executable carries the version
+        shell: pwsh
+        run: |
+          $info = (Get-Item build/release-ci/src/app/Knect4.exe).VersionInfo
+          "Knect4.exe: $($info.ProductName) $($info.ProductVersion), $($info.FileDescription)"
+          if ($info.ProductVersion -ne $env:VERSION) { throw "the version resource says $($info.ProductVersion), not $env:VERSION" }
+      - name: Package
+        shell: pwsh
+        env:
+          ESIGNER_USERNAME: ${{ secrets.ESIGNER_USERNAME }}
+          ESIGNER_PASSWORD: ${{ secrets.ESIGNER_PASSWORD }}
+          ESIGNER_TOTP_SECRET: ${{ secrets.ESIGNER_TOTP_SECRET }}
+          ESIGNER_CREDENTIAL_ID: ${{ secrets.ESIGNER_CREDENTIAL_ID }}
+        run: |
+          & "${{ steps.cpp.outputs.python }}" -I packaging/stage.py build/release-ci build/release-dist windows
+          if ($LASTEXITCODE -ne 0) { throw "the stage failed" }
+          $sign = @()
+          if ('${{ steps.esigner.outputs.sign }}' -eq 'true') { $sign = @('-SignWithESigner') }
+          pwsh -NoProfile -File packaging/windows/make_installer.ps1 -DistDir build/release-dist -Version $env:VERSION `
+            -OutDir build/release-out -Fetch @sign
+          if ($LASTEXITCODE -ne 0) { throw "the installer was not made" }
+          pwsh -NoProfile -File packaging/windows/test_installer.ps1 -DistDir build/release-dist -Version $env:VERSION
+          if ($LASTEXITCODE -ne 0) { throw "the installer's test failed" }
+          Get-ChildItem build/release-out | ForEach-Object { "$($_.Name)  $([math]::Round($_.Length / 1MB, 1)) MB" }
+      # The installer as Windows checks it before anything is uploaded: signed, by Jonathan Reckless, timestamped.
+      - name: The signature
+        if: steps.esigner.outputs.sign == 'true'
+        shell: pwsh
+        run: |
+          $file = Get-Item "build/release-out/knect4-$env:VERSION-win64-setup.exe"
+          $signature = Get-AuthenticodeSignature $file.FullName
+          "$($file.Name): $($signature.Status), $($signature.SignerCertificate.Subject), timestamp $($signature.TimeStamperCertificate.Subject)"
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '^CN=Jonathan Reckless,' -or -not $signature.TimeStamperCertificate) {
+            throw "$($file.FullName) is not validly signed by Jonathan Reckless with a timestamp"
+          }
+      - name: Upload to the draft release
+        if: needs.verify.outputs.draft == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.verify.outputs.release_id }}
+        run: |
+          for file in build/release-out/*; do
+            name=$(basename "$file")
+            curl --fail-with-body --silent --show-error -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/octet-stream" --data-binary "@$file" \
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$name" \
+              | grep -o '"browser_download_url": *"[^"]*"'
+          done
+      - uses: actions/upload-artifact@v6
+        if: needs.verify.outputs.draft != 'true'
+        continue-on-error: true
+        with:
+          name: knect4-windows
+          path: build/release-out/*
+          retention-days: 1
+
+  # macOS, universal, for 13.3 on, in a tree built from nothing on the Apple silicon runner: every suite natively, both
+  # slices and the floor held, then - where the signing secrets are set - the app signed, the installer signed,
+  # notarised, stapled and held to the signed stage; otherwise the installer unsigned and held to its stage.
+  macos:
+    name: Package macOS
+    needs: verify
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 240
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          clean: false
+      - name: Start from nothing
+        run: rm -rf build/release-ci build/release-dist build/release-out
+      - name: The toolkit submodule
+        uses: ./.github/actions/toolkit
+        with:
+          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
+      - name: Toolchain
+        id: cpp
+        uses: ./.github/actions/cpp
+      - name: Whether to sign
+        id: signing
+        env:
+          MACOS_DEVELOPER_ID_APPLICATION_P12: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_P12 }}
+        run: |
+          if [ -n "$MACOS_DEVELOPER_ID_APPLICATION_P12" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::no macOS signing secrets in this repository: the macOS installer is unsigned and not notarised"
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Configure
+        run: |
+          # The configure's own status decides the step, not tee's, which succeeds whatever came down the pipe.
+          set -o pipefail
+          mkdir -p build
+          cmake -S . -B build/release-ci -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.3 -DFETCHCONTENT_UPDATES_DISCONNECTED=ON \
+            "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}" | tee build/configure.log
+          grep -q "Knect 4 $VERSION" build/configure.log || { echo "::error::the configure does not report $VERSION"; exit 1; }
+      - name: Build
+        run: cmake --build build/release-ci -j ${{ steps.cpp.outputs.jobs }}
+      - name: Both slices, the floor, the version and the icon
+        run: |
+          set -euo pipefail
+          app=build/release-ci/src/app/Knect4.app
+          binary="$app/Contents/MacOS/Knect4"
+          for arch in arm64 x86_64; do lipo "$binary" -verify_arch "$arch"; done
+          [ "$(vtool -show-build "$binary" | awk '/minos/ {print $2}' | sort -u)" = 13.3 ] || { echo "::error::$binary is not for macOS 13.3"; exit 1; }
+          [ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$VERSION" ] ||
+            { echo "::error::the app's plist is not at $VERSION"; exit 1; }
+          icon=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")
+          cmp "$app/Contents/Resources/$icon" assets/icon/icon.icns ||
+            { echo "::error::the bundle's $icon, which its plist names, is not assets/icon/icon.icns"; exit 1; }
+      - name: Test
+        run: ctest --test-dir build/release-ci --output-on-failure -j "$(sysctl -n hw.ncpu)"
+      - name: Open the signing keychain
+        if: steps.signing.outputs.sign == 'true'
+        env:
+          MACOS_DEVELOPER_ID_APPLICATION_P12: ${{ secrets.MACOS_DEVELOPER_ID_APPLICATION_P12 }}
+          MACOS_DEVELOPER_ID_INSTALLER_P12: ${{ secrets.MACOS_DEVELOPER_ID_INSTALLER_P12 }}
+          MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
+          MACOS_TEAM_ID: ${{ secrets.MACOS_TEAM_ID }}
+        run: external/reckless-toolkit/tools/sign-mac.sh open
+      - name: Package
+        env:
+          IS_SIGNED: ${{ steps.signing.outputs.sign }}
+        run: |
+          set -euo pipefail
+          python3 -I packaging/stage.py build/release-ci build/release-dist macos
+          pkg="build/release-out/knect4-$VERSION-macos.pkg"
+          if [ "$IS_SIGNED" = true ]; then
+            packaging/macos/sign.sh build/release-dist
+            # make_installer.sh signs only when it is handed an identity and otherwise makes an unsigned package, so an
+            # empty lookup stops the job here rather than at the notary or the signature check after it.
+            export RECKLESS_SIGNING_KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+            RECKLESS_INSTALLER_IDENTITY=$(security find-identity -v -p basic "$RECKLESS_SIGNING_KEYCHAIN" |
+              sed -n 's/.*"\(Developer ID Installer: .*\)"/\1/p' | head -n 1)
+            [ -n "$RECKLESS_INSTALLER_IDENTITY" ] || { echo "::error::no Developer ID Installer identity in $RECKLESS_SIGNING_KEYCHAIN"; exit 1; }
+            RECKLESS_APPLICATION_IDENTITY=$(security find-identity -v -p codesigning "$RECKLESS_SIGNING_KEYCHAIN" |
+              sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -n 1)
+            [ -n "$RECKLESS_APPLICATION_IDENTITY" ] || { echo "::error::no Developer ID Application identity in $RECKLESS_SIGNING_KEYCHAIN"; exit 1; }
+            export RECKLESS_INSTALLER_IDENTITY RECKLESS_APPLICATION_IDENTITY
+          fi
+          packaging/macos/make_installer.sh build/release-dist "$VERSION" "$pkg"
+      - name: Notarise the installer
+        if: steps.signing.outputs.sign == 'true'
+        env:
+          MACOS_NOTARY_KEY_P8: ${{ secrets.MACOS_NOTARY_KEY_P8 }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER_ID: ${{ secrets.MACOS_NOTARY_ISSUER_ID }}
+        run: external/reckless-toolkit/tools/sign-mac.sh notarize "build/release-out/knect4-$VERSION-macos.pkg"
+      - name: The installer holds the stage
+        env:
+          IS_SIGNED: ${{ steps.signing.outputs.sign }}
+        run: |
+          signed=""
+          [ "$IS_SIGNED" = true ] && signed=--signed
+          packaging/macos/test_installer.sh build/release-dist "$VERSION" "build/release-out/knect4-$VERSION-macos.pkg" $signed
+      - name: Upload to the draft release
+        if: needs.verify.outputs.draft == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.verify.outputs.release_id }}
+        run: |
+          for file in build/release-out/*; do
+            name=$(basename "$file")
+            curl --fail-with-body --silent --show-error -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/octet-stream" --data-binary "@$file" \
+              "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID/assets?name=$name" \
+              | grep -o '"browser_download_url": *"[^"]*"'
+          done
+      - uses: actions/upload-artifact@v6
+        if: needs.verify.outputs.draft != 'true'
+        continue-on-error: true
+        with:
+          name: knect4-macos
+          path: build/release-out/*
+          retention-days: 1
+      - name: Close the signing keychain
+        if: always() && steps.signing.outputs.sign == 'true'
+        run: external/reckless-toolkit/tools/sign-mac.sh close
+
+  # The draft found by the id verify opened it with, its four files all there. It stays a draft: publishing it, which
+  # makes its tag, is done by hand.
+  draft:
+    name: Check the draft
+    if: needs.verify.outputs.draft == 'true'
+    needs: [verify, linux, windows, macos]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      TAG: ${{ needs.verify.outputs.tag }}
+      RELEASE_ID: ${{ needs.verify.outputs.release_id }}
+    steps:
+      - name: Every package on the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release="repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID"
+          [ "$(gh api "$release" --jq .tag_name)" = "$TAG" ] || { echo "::error::the draft verify opened (id $RELEASE_ID) is not for $TAG"; exit 1; }
+          [ "$(gh api "$release" --jq .draft)" = true ] || { echo "::error::release $TAG is no longer a draft"; exit 1; }
+          assets=$(gh api "$release" --jq '.assets[].name')
+          missing=""
+          for file in "knect4-$VERSION-linux-x64.tar.xz" "knect4-$VERSION-linux-amd64.deb" \
+                      "knect4-$VERSION-win64-setup.exe" "knect4-$VERSION-macos.pkg"; do
+            grep -qx "$file" <<< "$assets" || { echo "::error::$file is not on the draft $TAG"; missing="$missing $file"; }
+          done
+          [ -z "$missing" ] || exit 1
+          gh api "$release" --jq '"draft \(.name): \(.html_url)", (.assets[] | "  \(.name)  \(.size) bytes")'
