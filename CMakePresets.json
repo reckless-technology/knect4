@@ -145,6 +145,7 @@
             },
             "environment": {
                 "ASAN_OPTIONS": "detect_leaks=1:abort_on_error=1",
+                "LSAN_OPTIONS": "suppressions=${sourceDir}/tools/lsan_suppressions.txt",
                 "UBSAN_OPTIONS": "print_stacktrace=1:halt_on_error=1"
             }
         },

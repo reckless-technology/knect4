@@ -83,7 +83,8 @@ cmake --build --preset release
 `ctest --preset release` runs the suites; the window's launch (`app_smoke`, label `window`) needs a display, which
 `xvfb-run -a ctest --preset release -L window` gives it where there is none. The `sanitize` preset builds everything
 under AddressSanitizer and UndefinedBehaviorSanitizer, the `tsan` preset under ThreadSanitizer (gcc or clang, Linux or
-macOS); each has a build and a test preset of the same name.
+macOS); each has a build and a test preset of the same name. The `sanitize` test preset leaves out the leaks of the
+system's PipeWire ALSA plugin, which the audio suite reaches through RtAudio (`tools/lsan_suppressions.txt`).
 
 ### Building on macOS
 

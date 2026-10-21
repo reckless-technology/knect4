@@ -223,15 +223,17 @@ jobs:
           retention-days: 30
 
   # Every suite under AddressSanitizer and UndefinedBehaviorSanitizer (the sanitize preset's options), the window's
-  # launch on Xvfb's display, with a leak a failure. Kept tree build/ci-sanitize. The runners' kernels randomise mmap
-  # more widely than the sanitizers' shadow memory allows, so the suites run with the address space's randomisation off
-  # (setarch -R), which their children inherit.
+  # launch on Xvfb's display, with a leak a failure - but those of the system's PipeWire ALSA plugin, which the audio
+  # suite reaches through RtAudio (tools/lsan_suppressions.txt). Kept tree build/ci-sanitize. So that a kernel's wider
+  # mmap randomisation never meets the sanitizers' fixed shadow memory, the suites run with the address space's
+  # randomisation off (setarch -R), which their children inherit.
   sanitizers:
     name: Linux sanitizers (address, undefined)
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 90
     env:
       ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/tools/lsan_suppressions.txt:print_suppressions=1
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
     steps:
       - uses: actions/checkout@v5
