@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cassert>
 
-namespace connect4
+namespace knect4
 {
 
 Game::Game(int width, int height)
@@ -80,7 +80,7 @@ std::vector<Cell> Game::WinningLine(int column) const
         return cells;
     }
     const int player = At(column, row);
-    for (const auto [step_column, step_row] : {std::pair{0, 1}, std::pair{1, 0}, std::pair{-1, 1}, std::pair{1, 1}})
+    for (const auto &[step_column, step_row] : {std::pair{0, 1}, std::pair{1, 0}, std::pair{-1, 1}, std::pair{1, 1}})
     {
         if (LineLength(column, row, step_column, step_row, player) < 4)
         {
@@ -279,4 +279,4 @@ std::string Game::ToString() const
     return text;
 }
 
-} // namespace connect4
+} // namespace knect4

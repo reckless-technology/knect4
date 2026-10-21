@@ -4,7 +4,7 @@
 
 #include <vector>
 
-namespace connect4
+namespace knect4
 {
 
 /**
@@ -88,4 +88,4 @@ class DropMotion
     std::vector<Impact> impacts_;            ///< The hits not yet taken.
 };
 
-} // namespace connect4
+} // namespace knect4

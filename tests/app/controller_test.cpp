@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-namespace connect4::app
+namespace knect4::app
 {
 namespace
 {
@@ -281,4 +281,4 @@ TEST(Menus, TickTheSettingsAndCarryOutTheirCommands)
 }
 
 } // namespace
-} // namespace connect4::app
+} // namespace knect4::app

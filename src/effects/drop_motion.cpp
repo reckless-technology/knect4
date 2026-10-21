@@ -4,7 +4,7 @@
 #include <cmath>
 #include <utility>
 
-namespace connect4
+namespace knect4
 {
 
 DropMotion::DropMotion(double rest, Physics physics) : rest_(std::max(rest, 0.0)), physics_(physics)
@@ -58,4 +58,4 @@ double DropMotion::HitSpeed(double rows, const Physics &physics)
     return std::sqrt(2.0 * physics.gravity * std::max(rows, 0.0));
 }
 
-} // namespace connect4
+} // namespace knect4

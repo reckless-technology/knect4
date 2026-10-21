@@ -8,7 +8,7 @@
 #include <cmath>
 #include <vector>
 
-namespace connect4
+namespace knect4
 {
 namespace
 {
@@ -176,4 +176,4 @@ TEST(ClickMixer, KeepsEightVoicesAndDropsWhatOverflowsItsQueue)
 }
 
 } // namespace
-} // namespace connect4
+} // namespace knect4

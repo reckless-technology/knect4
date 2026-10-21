@@ -10,7 +10,7 @@
 
 #include <memory>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 /** The window's views, laid out at whatever size the window has. */
@@ -59,4 +59,4 @@ class MainView final : public reckless::view::View
     SidePanel                                   panel_;    ///< The panel.
 };
 
-} // namespace connect4::app
+} // namespace knect4::app

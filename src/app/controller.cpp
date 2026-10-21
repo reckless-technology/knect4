@@ -7,7 +7,7 @@
 #include <cmath>
 #include <numbers>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 namespace
@@ -408,4 +408,4 @@ std::string Controller::StatusText() const
     }
 }
 
-} // namespace connect4::app
+} // namespace knect4::app

@@ -1,6 +1,6 @@
 name: build
 
-# Connect Four built on Windows with MSVC, its suites run (the window's launch among them), and Connect4.exe kept as the
+# Knect 4 built on Windows with MSVC, its suites run (the window's launch among them), and Knect4.exe kept as the
 # run's artifact; and the C++ held to clang-format 22.1.8. The repository is private, so the jobs run on the
 # organisation's self-hosted runners. The window is built on the toolkit, a private submodule read through its
 # read-only deploy key (.github/actions/toolkit).
@@ -59,7 +59,7 @@ jobs:
               "$($Matches[1])=$($Matches[2])" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
             }
           }
-          $deps = Join-Path $env:RUNNER_TOOL_CACHE "connect4-deps\msvc"
+          $deps = Join-Path $env:RUNNER_TOOL_CACHE "knect4-deps\msvc"
           New-Item -ItemType Directory -Force -Path $deps | Out-Null
           "Visual Studio: $vs; dependencies: $deps"
           "deps=$deps" >> $env:GITHUB_OUTPUT
@@ -76,8 +76,8 @@ jobs:
       - name: Upload the executable
         uses: actions/upload-artifact@v6
         with:
-          name: connect4-windows
-          path: build/ci/src/app/Connect4.exe
+          name: knect4-windows
+          path: build/ci/src/app/Knect4.exe
           if-no-files-found: error
           retention-days: 30
 

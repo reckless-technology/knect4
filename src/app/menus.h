@@ -8,7 +8,7 @@
 
 #include <functional>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 /** The menu's commands, as the bar reports them. */
@@ -42,4 +42,4 @@ reckless::app::MenuBar BuildMenuBar(const Settings &settings);
  */
 void RunCommand(int command, Controller &controller, const std::function<void()> &quit);
 
-} // namespace connect4::app
+} // namespace knect4::app

@@ -1,10 +1,10 @@
 """The app's icon at every size a platform asks for, each drawn from the board's own art by the render tool
-(connect4_render <out.png> icon <size>) rather than scaled from one picture, packed into assets/icon/: icon.ico (the
+(knect4_render <out.png> icon <size>) rather than scaled from one picture, packed into assets/icon/: icon.ico (the
 sizes Explorer and the task bar take), icon.icns (a macOS bundle's) and icon_256.png (a Linux window's, embedded).
 Run it after changing the icon's drawing (render_main.cpp's RenderIcon) and commit what it writes; the build needs no
 Python. Needs Pillow.
 
-    python tools/make_icon.py <path to connect4_render>
+    python tools/make_icon.py <path to knect4_render>
 """
 
 import pathlib

@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace connect4::app::art
+namespace knect4::app::art
 {
 
 namespace
@@ -249,4 +249,4 @@ void DrawSlotRing(reckless::gfx::Canvas &c, PointF centre, Color colour, float t
     c.DrawEllipse(Circle(centre, kHoleRadius - thickness / 2.0f), thickness);
 }
 
-} // namespace connect4::app::art
+} // namespace knect4::app::art

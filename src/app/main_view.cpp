@@ -4,7 +4,7 @@
 
 #include <utility>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 MainView::MainView()
@@ -62,4 +62,4 @@ void MainView::Resized()
     panel_.SetBounds({width() - panel_width, top, panel_width, std::max(height() - top, 0)});
 }
 
-} // namespace connect4::app
+} // namespace knect4::app

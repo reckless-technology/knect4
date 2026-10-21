@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace connect4
+namespace knect4
 {
 
 inline constexpr int kMax   = 1;  ///< The computer's pieces, the side the evaluation is written for.
@@ -222,4 +222,4 @@ class Game
     std::vector<int> column_height_; ///< The pieces in each column.
 };
 
-} // namespace connect4
+} // namespace knect4

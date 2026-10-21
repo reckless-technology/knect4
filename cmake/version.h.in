@@ -1,9 +1,9 @@
 #pragma once
 /// @file version.h The version every binary reports, written by CMake from project().
 
-namespace connect4
+namespace knect4
 {
 
 inline constexpr const char *kVersion = "@PROJECT_VERSION@"; ///< MAJOR.MINOR.BUILD.
 
-} // namespace connect4
+} // namespace knect4

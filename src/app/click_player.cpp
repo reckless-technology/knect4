@@ -6,7 +6,7 @@
 #include <utility>
 #include <vector>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 ClickPlayer::ClickPlayer() = default;
@@ -44,7 +44,7 @@ bool ClickPlayer::Open()
     request.output_count  = std::min(chosen->output_channels, 2);
     request.sample_rate   = chosen->DefaultSampleRate();
     request.block_size    = 256;
-    request.client_name   = "Connect Four";
+    request.client_name   = "Knect 4";
     has_failed_.store(false);
     if (!system_->Open(request, *this))
     {
@@ -129,4 +129,4 @@ void ClickPlayer::StreamFailed() noexcept
     has_failed_.store(true);
 }
 
-} // namespace connect4::app
+} // namespace knect4::app

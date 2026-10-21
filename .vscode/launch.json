@@ -3,11 +3,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Connect Four",
+            "name": "Knect 4",
             "type": "cppvsdbg",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/build/debug/src/app/Connect4.exe",
+            "program": "${workspaceFolder}/build/debug/src/app/Knect4.exe",
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false
         }

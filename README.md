@@ -1,6 +1,6 @@
-# connect4
+# knect4
 
-Connect Four against the computer: drop pucks into a blue upright board, four in a row across, up or diagonally wins.
+Knect 4 against the computer: drop pucks into a blue upright board, four in a row across, up or diagonally wins.
 A C++20 program with its window drawn in Skia on reckless-toolkit, in the Reckless apps' look.
 
 ![The game under way](docs/images/game.png)
@@ -16,6 +16,9 @@ A C++20 program with its window drawn in Skia on reckless-toolkit, in the Reckle
   other), who starts the next game, and the sound, and keeps the score. "New game" starts again; when a game ends the
   winning line glows and "Play again" appears over the board. The Game menu has all of these, with Ctrl+N for a new
   game, Ctrl+1 to Ctrl+3 for the levels and Ctrl+M for the sound.
+- The level, colour, who starts and the sound are kept between launches, in `reckless-technology/knect4/settings.json`
+  in the user's settings folder (`%APPDATA%` on Windows, `~/Library/Application Support` on macOS, `~/.config` on
+  Linux). The score is the session's own.
 
 ## The game
 
@@ -49,15 +52,15 @@ Ninja:
 ```
 git submodule update --init                      # the toolkit, external/reckless-toolkit (private)
 cmake --preset release && cmake --build --preset release && ctest --preset release
-build/release/src/app/Connect4.exe
+build/release/src/app/Knect4.exe
 ```
 
-`-DCONNECT4_GUI=OFF` builds the game and its suites alone, with no submodule. VS Code's default build task builds the
-Debug configuration, its test task runs the suites, and the "Connect Four" launch entry starts it under the debugger.
+`-DKNECT4_GUI=OFF` builds the game and its suites alone, with no submodule. VS Code's default build task builds the
+Debug configuration, its test task runs the suites, and the "Knect 4" launch entry starts it under the debugger.
 
-- `build/release/src/app/connect4_render <out.png> [mid|drop|won|lost]` draws the window in that state to a PNG;
+- `build/release/src/app/knect4_render <out.png> [mid|drop|won|lost]` draws the window in that state to a PNG;
   `docs/images/` holds its pictures.
-- `python tools/make_icon.py build/release/src/app/connect4_render.exe` draws the icon at every size into
+- `python tools/make_icon.py build/release/src/app/knect4_render.exe` draws the icon at every size into
   `assets/icon/` (Pillow); the build takes them from there and needs no Python.
 - C++ is formatted with clang-format 22.1.8 (`.clang-format`), which the pre-commit hook and CI check. In a fresh clone:
   `git config core.hooksPath .githooks`.
@@ -65,8 +68,8 @@ Debug configuration, its test task runs the suites, and the "Connect Four" launc
 ## CI
 
 `.github/workflows/build.yml`, on the organisation's self-hosted runners (the repository is private): Windows with MSVC
-builds everything, runs every suite including the window's launch, and keeps `Connect4.exe` as the run's artifact
-`connect4-windows` for 30 days; a Linux job checks the formatting. The toolkit submodule is read through its read-only
+builds everything, runs every suite including the window's launch, and keeps `Knect4.exe` as the run's artifact
+`knect4-windows` for 30 days; a Linux job checks the formatting. The toolkit submodule is read through its read-only
 deploy key, the secret `RECKLESS_TOOLKIT_DEPLOY_KEY`.
 
 ## History

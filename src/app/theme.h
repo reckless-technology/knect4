@@ -13,7 +13,7 @@
 
 #include <string_view>
 
-namespace connect4::app::theme
+namespace knect4::app::theme
 {
 
 using reckless::gfx::Color;
@@ -62,9 +62,9 @@ inline reckless::look::Palette Buttons()
     return {kWindow, kInk, kAmber, kPlate, kAmberDim};
 }
 
-} // namespace connect4::app::theme
+} // namespace knect4::app::theme
 
-namespace connect4::app::fonts
+namespace knect4::app::fonts
 {
 
 using reckless::gfx::Font;
@@ -105,9 +105,9 @@ inline Font Count()
     return Font(34.0f).Bold();
 }
 
-} // namespace connect4::app::fonts
+} // namespace knect4::app::fonts
 
-namespace connect4::app::theme
+namespace knect4::app::theme
 {
 
 /**
@@ -191,4 +191,4 @@ inline reckless::app::MenuBarStyle MenuBarLook()
     return style;
 }
 
-} // namespace connect4::app::theme
+} // namespace knect4::app::theme

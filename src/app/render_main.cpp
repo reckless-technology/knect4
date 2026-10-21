@@ -21,7 +21,7 @@
 namespace
 {
 
-using connect4::app::BoardPicture;
+using knect4::app::BoardPicture;
 
 /** The window's host with no window: text measured as Skia draws it, so a line of text lays out as the window does. */
 class RenderHost final : public reckless::view::Host
@@ -77,26 +77,26 @@ int RenderIcon(int size, const std::string &path)
         reckless::gfx::Canvas &c = *canvas;
         // Two by two slots of the board, red and yellow crosswise, cut out of a rounded square of its plastic: the
         // slots' block centred, at a scale that leaves the next slots' holes just outside the square.
-        using connect4::app::art::ColumnX;
-        using connect4::app::art::RowY;
+        using knect4::app::art::ColumnX;
+        using knect4::app::art::RowY;
         reckless::gfx::Path square;
         square.AddRoundedRect({8.0f, 8.0f, 240.0f, 240.0f}, 52.0f);
         c.ClipToPath(square);
-        c.FillAll(connect4::app::theme::kWindow);
+        c.FillAll(knect4::app::theme::kWindow);
         const float centre_x = ColumnX(0.5f);
         const float centre_y = (RowY(0) + RowY(1)) / 2.0f;
         c.AddTransform(reckless::gfx::Affine::Translation(-centre_x, -centre_y)
                            .FollowedBy(reckless::gfx::Affine::Scale(1.4f))
                            .Translated(128.0f, 128.0f));
-        connect4::app::art::DrawPuck(c, {ColumnX(0.0f), RowY(0)}, connect4::app::art::kPuckRadius,
-                                     connect4::app::theme::kRed);
-        connect4::app::art::DrawPuck(c, {ColumnX(1.0f), RowY(0)}, connect4::app::art::kPuckRadius,
-                                     connect4::app::theme::kYellow);
-        connect4::app::art::DrawPuck(c, {ColumnX(0.0f), RowY(1)}, connect4::app::art::kPuckRadius,
-                                     connect4::app::theme::kYellow);
-        connect4::app::art::DrawPuck(c, {ColumnX(1.0f), RowY(1)}, connect4::app::art::kPuckRadius,
-                                     connect4::app::theme::kRed);
-        connect4::app::art::DrawFrame(c);
+        knect4::app::art::DrawPuck(c, {ColumnX(0.0f), RowY(0)}, knect4::app::art::kPuckRadius,
+                                   knect4::app::theme::kRed);
+        knect4::app::art::DrawPuck(c, {ColumnX(1.0f), RowY(0)}, knect4::app::art::kPuckRadius,
+                                   knect4::app::theme::kYellow);
+        knect4::app::art::DrawPuck(c, {ColumnX(0.0f), RowY(1)}, knect4::app::art::kPuckRadius,
+                                   knect4::app::theme::kYellow);
+        knect4::app::art::DrawPuck(c, {ColumnX(1.0f), RowY(1)}, knect4::app::art::kPuckRadius,
+                                   knect4::app::theme::kRed);
+        knect4::app::art::DrawFrame(c);
     }
     return Write(image, path) ? 0 : 1;
 }
@@ -113,8 +113,8 @@ int main(int argc, char **argv)
 {
     if (argc < 2)
     {
-        std::fprintf(stderr, "usage: connect4_render <out.png> [mid|won|lost|empty] [scale]\n"
-                             "       connect4_render <out.png> icon <size>\n");
+        std::fprintf(stderr, "usage: knect4_render <out.png> [mid|won|lost|empty] [scale]\n"
+                             "       knect4_render <out.png> icon <size>\n");
         return 2;
     }
     reckless::gfx::SetSerifFaces(reckless::embedded::Find("NotoSerif-Regular.ttf"),
@@ -128,7 +128,7 @@ int main(int argc, char **argv)
     const float scale = argc > 3 ? static_cast<float>(std::atof(argv[3])) : 1.0f;
 
     // The person starts every game set up here: their pucks are the odd moves.
-    connect4::app::Controller controller(nullptr);
+    knect4::app::Controller controller(nullptr);
     if (state == "mid" || state == "drop")
     {
         // The person's turn, their puck held over column 5 - or dropped, half way down.
@@ -154,33 +154,32 @@ int main(int argc, char **argv)
     {
         controller.PlaceMoves({0, 3, 0, 3, 1, 3, 6, 3});
     }
-    for (int frame = 0; frame != 240 && controller.phase() == connect4::app::Phase::kDropping && state != "drop";
-         ++frame)
+    for (int frame = 0; frame != 240 && controller.phase() == knect4::app::Phase::kDropping && state != "drop"; ++frame)
     {
         controller.Frame(1.0 / 60.0);
     }
 
-    connect4::app::MainView view;
-    RenderHost              host;
+    knect4::app::MainView view;
+    RenderHost            host;
     view.SetHost(&host);
-    view.SetBounds({connect4::app::MainView::kDesignWidth, connect4::app::MainView::kDesignHeight});
+    view.SetBounds({knect4::app::MainView::kDesignWidth, knect4::app::MainView::kDesignHeight});
     view.Show(controller);
 
-    const int width  = static_cast<int>(static_cast<float>(connect4::app::MainView::kDesignWidth) * scale + 0.5f);
-    const int height = static_cast<int>(static_cast<float>(connect4::app::MainView::kDesignHeight) * scale + 0.5f);
+    const int width  = static_cast<int>(static_cast<float>(knect4::app::MainView::kDesignWidth) * scale + 0.5f);
+    const int height = static_cast<int>(static_cast<float>(knect4::app::MainView::kDesignHeight) * scale + 0.5f);
     reckless::gfx::Image image = reckless::gfx::MakeImage(width, height);
     {
         const auto canvas = reckless::gfx::MakeImageCanvas(image, scale);
         if (!canvas)
         {
-            std::fprintf(stderr, "connect4_render: no canvas\n");
+            std::fprintf(stderr, "knect4_render: no canvas\n");
             return 1;
         }
         reckless::view::PaintTree(view, *canvas);
     }
     if (!Write(image, out))
     {
-        std::fprintf(stderr, "connect4_render: could not write %s\n", out.c_str());
+        std::fprintf(stderr, "knect4_render: could not write %s\n", out.c_str());
         return 1;
     }
     std::printf("%s: %d x %d at %.2fx\n", out.c_str(), width, height, static_cast<double>(scale));

@@ -13,7 +13,7 @@
 #include <memory>
 #include <string>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 /** The score: the games each side won and the games drawn, as three large counts. */
@@ -96,4 +96,4 @@ class SidePanel final : public reckless::view::View
     std::unique_ptr<ScoreView>                             score_;           ///< The counts.
 };
 
-} // namespace connect4::app
+} // namespace knect4::app

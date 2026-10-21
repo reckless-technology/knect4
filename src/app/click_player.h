@@ -13,7 +13,7 @@
 #include <memory>
 #include <string>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 /**
@@ -77,4 +77,4 @@ class ClickPlayer final : public ClickSink, private reckless::audio::AudioCallba
     unsigned                                      next_{0};           ///< The next variation to play.
 };
 
-} // namespace connect4::app
+} // namespace knect4::app

@@ -14,7 +14,7 @@
 #include <optional>
 #include <string>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 /** How hard the computer plays: how far it searches. */
@@ -38,6 +38,12 @@ struct Settings
     bool  is_person_red{true};     ///< The person's pucks are red, the computer's yellow; else the other way round.
     bool  does_person_start{true}; ///< The person drops the first puck of each new game.
     bool  has_sound{true};         ///< Each landing clicks.
+
+    /**
+     * @param other Other choices.
+     * @return Whether they are the same.
+     */
+    bool operator==(const Settings &other) const = default;
 };
 
 /** The games so far. */
@@ -246,4 +252,4 @@ class Controller
     double            glow_time_{0.0}; ///< Seconds since the game ended, for the glow's pulse.
 };
 
-} // namespace connect4::app
+} // namespace knect4::app

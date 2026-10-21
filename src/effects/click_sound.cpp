@@ -5,7 +5,7 @@
 #include <numbers>
 #include <utility>
 
-namespace connect4
+namespace knect4
 {
 
 namespace
@@ -223,4 +223,4 @@ int ClickMixer::SoundingCount() const noexcept
     return sounding_.load(std::memory_order_relaxed);
 }
 
-} // namespace connect4
+} // namespace knect4

@@ -6,7 +6,7 @@
 #include <cmath>
 #include <utility>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 namespace
@@ -290,4 +290,4 @@ bool BoardView::KeyPressed(const reckless::view::KeyEvent &key)
     }
 }
 
-} // namespace connect4::app
+} // namespace knect4::app

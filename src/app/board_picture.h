@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 /** A puck falling down a column, behind the frame. */
@@ -47,4 +47,4 @@ struct BoardPicture
     bool                    may_choose{false};          ///< The person may choose a column: the pointer shows a hand.
 };
 
-} // namespace connect4::app
+} // namespace knect4::app

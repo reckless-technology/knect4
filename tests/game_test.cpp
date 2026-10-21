@@ -10,7 +10,7 @@
 #include <string>
 #include <vector>
 
-namespace connect4
+namespace knect4
 {
 namespace
 {
@@ -207,8 +207,8 @@ TEST(Game, PrunesToTheSameMoveAndScoreAsTheFullSearch)
 TEST(Game, PlaysAsTheOriginalPlayed)
 {
     // Self-play recorded from the C# game: every move and score, at depths 1 to 7, from openings of a few moves.
-    std::ifstream file(CONNECT4_TEST_DATA "/csharp_self_play.txt");
-    ASSERT_TRUE(file) << "the fixture " CONNECT4_TEST_DATA "/csharp_self_play.txt";
+    std::ifstream file(KNECT4_TEST_DATA "/csharp_self_play.txt");
+    ASSERT_TRUE(file) << "the fixture " KNECT4_TEST_DATA "/csharp_self_play.txt";
     std::string line;
     int         games = 0;
     while (std::getline(file, line))
@@ -278,4 +278,4 @@ TEST(Game, StopsWhenAsked)
 }
 
 } // namespace
-} // namespace connect4
+} // namespace knect4

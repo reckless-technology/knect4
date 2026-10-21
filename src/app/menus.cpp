@@ -3,7 +3,7 @@
 #include <string>
 #include <utility>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 namespace
@@ -82,4 +82,4 @@ void RunCommand(int command, Controller &controller, const std::function<void()>
     }
 }
 
-} // namespace connect4::app
+} // namespace knect4::app

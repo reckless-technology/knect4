@@ -6,7 +6,7 @@
 #include <string_view>
 #include <utility>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 namespace
@@ -82,7 +82,7 @@ SidePanel::SidePanel()
     title_                           = std::make_unique<reckless::app::TextLine>(theme::kAmber, fonts::Label());
     headline_                        = std::make_unique<reckless::app::TextLine>(theme::kInk, fonts::Headline());
     detail_                          = std::make_unique<reckless::app::TextLine>(theme::kMuted, fonts::Small());
-    title_->SetText("CONNECT FOUR");
+    title_->SetText("KNECT 4");
     for (auto *line : {title_.get(), headline_.get(), detail_.get()})
     {
         AddChild(*line);
@@ -235,4 +235,4 @@ void SidePanel::Resized()
     sound_->SetBounds({kMargin, std::max(y, height() - kMargin - kPlateHeight), 120, kPlateHeight});
 }
 
-} // namespace connect4::app
+} // namespace knect4::app

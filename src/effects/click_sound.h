@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace connect4
+namespace knect4
 {
 
 /** What a puck lands on: the board's base, deeper, or the puck below, brighter. */
@@ -97,4 +97,4 @@ class ClickMixer
     std::atomic<int>                sounding_{0}; ///< The voices in use after the last block.
 };
 
-} // namespace connect4
+} // namespace knect4

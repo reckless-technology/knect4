@@ -10,7 +10,7 @@
 
 #include <vector>
 
-namespace connect4::app::art
+namespace knect4::app::art
 {
 
 using reckless::gfx::PointF;
@@ -94,4 +94,4 @@ void DrawStand(reckless::gfx::Canvas &c);
  */
 void DrawSlotRing(reckless::gfx::Canvas &c, PointF centre, reckless::gfx::Color colour, float thickness);
 
-} // namespace connect4::app::art
+} // namespace knect4::app::art

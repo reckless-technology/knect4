@@ -10,7 +10,7 @@
 
 #include <functional>
 
-namespace connect4::app
+namespace knect4::app
 {
 
 /**
@@ -80,4 +80,4 @@ class BoardView final : public reckless::view::View
     int          column_under_pointer_{-1}; ///< The column last told.
 };
 
-} // namespace connect4::app
+} // namespace knect4::app
