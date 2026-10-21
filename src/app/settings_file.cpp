@@ -80,4 +80,23 @@ bool WriteSettings(const std::filesystem::path &file, const Settings &settings)
     return reckless::core::WriteJsonFile(file, document);
 }
 
+Settings SettingsKeeper::Read()
+{
+    seen_ = ReadSettings(file_);
+    return *seen_;
+}
+
+bool SettingsKeeper::Changed(const Settings &now)
+{
+    const bool differs = !seen_ || !(*seen_ == now);
+    if (differs && seen_ && WriteSettings(file_, now))
+    {
+        ++writes_;
+    }
+    const bool is_first = !has_reported_;
+    has_reported_       = true;
+    seen_               = now;
+    return differs || is_first;
+}
+
 } // namespace knect4::app

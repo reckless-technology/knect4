@@ -25,7 +25,12 @@ bool Game::IsMovePossible(int column) const
 
 void Game::DoMove(int column, int player)
 {
+    // A column with no room, or off the board, is a caller's mistake: refused rather than written past the board.
     assert(IsMovePossible(column));
+    if (!IsMovePossible(column))
+    {
+        return;
+    }
     int &column_height                                             = column_height_[static_cast<std::size_t>(column)];
     board_[static_cast<std::size_t>(Index(column, column_height))] = player;
     ++column_height;
@@ -33,8 +38,12 @@ void Game::DoMove(int column, int player)
 
 void Game::UndoMove(int column)
 {
+    assert(column >= 0 && column < width_ && column_height_[static_cast<std::size_t>(column)] > 0);
+    if (column < 0 || column >= width_ || column_height_[static_cast<std::size_t>(column)] == 0)
+    {
+        return;
+    }
     int &column_height = column_height_[static_cast<std::size_t>(column)];
-    assert(column_height > 0);
     --column_height;
     board_[static_cast<std::size_t>(Index(column, column_height))] = kEmpty;
 }
@@ -63,6 +72,11 @@ bool Game::HasRoom() const
 
 bool Game::IsWinningMove(int column, int player) const
 {
+    // An empty column holds no move to have won with; EvaluateMove would read a line through the row below the board.
+    if (column < 0 || column >= width_ || ColumnHeight(column) == 0)
+    {
+        return false;
+    }
     return EvaluateMove(column, true, player) >= kWinningScore;
 }
 
@@ -125,6 +139,7 @@ int Game::EvaluateMove(int column, bool has_move_been_made, int player) const
 {
     const int row   = has_move_been_made ? ColumnHeight(column) - 1 : ColumnHeight(column);
     int       score = 0;
+    assert(row >= 0 && row < height_); // a piece there, or a slot it could drop into
 
     // Vertically only the pieces below count: nothing stands above a column's top piece.
     int length = 1;
@@ -167,6 +182,7 @@ int Game::EvaluateBoard() const
 int Game::Negamax(int depth, int alpha, int beta, bool do_alpha_beta, int player, int &best_move,
                   const std::atomic<bool> *stop)
 {
+    assert(depth >= 0);
     if (stop != nullptr && stop->load(std::memory_order_relaxed))
     {
         return 0;

@@ -2,7 +2,7 @@
 
 Guidance for Claude Code in this repository. The README is the long-form reference: the game, the feel, building, CI.
 
-Knect 4 against the computer, C++20, its window on reckless-toolkit (a private submodule at
+Knect 4, against the computer or between two people at one board, C++20, its window on reckless-toolkit (a private submodule at
 `external/reckless-toolkit`, added with its GUI and its audio device layer on, its suites and ASIO off). Private;
 proprietary, Jonny Reckless's.
 
@@ -37,3 +37,6 @@ proprietary, Jonny Reckless's.
   when CI is green.
 - CI runs on the organisation's self-hosted runners only (the repository is private).
 - The game is a consumer of the toolkit: a bump of the submodule points at a commit on the toolkit's `main` (CI checks).
+- Line coverage of `src/` stays at 95 % or more (`tools/coverage-windows.ps1`, CI's coverage job): every new behaviour
+  gets a test; the views are driven by events and painted into images in `tests/app/views_test.cpp`, the audio output
+  through the toolkit's offline API in `tests/app/click_player_test.cpp`.

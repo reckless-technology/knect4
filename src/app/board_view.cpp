@@ -176,7 +176,9 @@ void BoardView::Track(PointF point)
     }
     const bool is_over_board = board.y >= 0.0f && board.y <= art::kFrameTop + art::kFrameHeight;
     const int  column        = is_over_board ? art::ColumnAt(board.x) : -1;
-    if (column != column_under_pointer_)
+    // Every move over the board is told, not only a change of column: the keys may have moved the held puck since, and
+    // the pointer moving takes it back to where the pointer is, so a click drops where the puck is seen.
+    if (column >= 0 || column != column_under_pointer_)
     {
         column_under_pointer_ = column;
         if (on_hover)
@@ -233,6 +235,11 @@ void BoardView::MouseDown(const reckless::view::MouseEvent &e)
 }
 
 bool BoardView::WantsKeyboardFocus() const
+{
+    return true;
+}
+
+bool BoardView::KeepsKeyboardFocus() const
 {
     return true;
 }

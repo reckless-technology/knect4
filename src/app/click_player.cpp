@@ -9,18 +9,39 @@
 namespace knect4::app
 {
 
-ClickPlayer::ClickPlayer() = default;
+ClickPlayer::ClickPlayer(SystemMaker make_system) : make_system_(std::move(make_system))
+{
+    if (!make_system_)
+    {
+        make_system_ = [] {
+            const std::string api = reckless::audio::DefaultAudioApi();
+            return api.empty() ? nullptr : reckless::audio::MakeAudioSystem(api);
+        };
+    }
+}
 
 ClickPlayer::~ClickPlayer()
 {
     Close();
 }
 
+void ClickPlayer::Prepare()
+{
+    quiet_for_ = 0.0;
+    if (is_running_ || retry_in_ > 0.0)
+    {
+        return;
+    }
+    if (!Open())
+    {
+        retry_in_ = kRetrySeconds;
+    }
+}
+
 bool ClickPlayer::Open()
 {
     Close();
-    const std::string api = reckless::audio::DefaultAudioApi();
-    system_               = api.empty() ? nullptr : reckless::audio::MakeAudioSystem(api);
+    system_ = make_system_();
     if (!system_)
     {
         error_ = "no audio API";
@@ -35,7 +56,7 @@ bool ClickPlayer::Open()
     const auto chosen = output != devices.end() ? output : any;
     if (chosen == devices.end())
     {
-        error_ = api + ": no output device";
+        error_ = system_->Name() + ": no output device";
         system_.reset();
         return false;
     }
@@ -48,7 +69,7 @@ bool ClickPlayer::Open()
     has_failed_.store(false);
     if (!system_->Open(request, *this))
     {
-        error_ = api + ": " + system_->LastError();
+        error_ = system_->Name() + ": " + system_->LastError();
         system_.reset();
         return false;
     }
@@ -65,7 +86,7 @@ bool ClickPlayer::Open()
     mixer_.SetSounds(std::move(sounds));
     if (!system_->Start())
     {
-        error_ = api + ": " + system_->LastError();
+        error_ = system_->Name() + ": " + system_->LastError();
         system_->Close();
         system_.reset();
         return false;
@@ -87,25 +108,27 @@ void ClickPlayer::Close()
 
 void ClickPlayer::Frame(double seconds)
 {
-    if (is_running_ && has_failed_.load())
+    retry_in_ = std::max(retry_in_ - seconds, 0.0);
+    if (!is_running_)
     {
-        Close();
-        error_    = "the output stopped";
-        retry_in_ = kRetrySeconds;
         return;
     }
-    if (!is_running_ && retry_in_ > 0.0)
+    if (has_failed_.load())
     {
-        retry_in_ -= seconds;
-        if (retry_in_ <= 0.0 && !Open())
-        {
-            retry_in_ = 0.0; // one try after a failure; the device may come back at the next launch
-        }
+        Close();
+        error_ = "the output stopped";
+        return;
+    }
+    quiet_for_ = mixer_.SoundingCount() > 0 ? 0.0 : quiet_for_ + seconds;
+    if (quiet_for_ >= kIdleSeconds)
+    {
+        Close();
     }
 }
 
 void ClickPlayer::Click(LandingOn landing, float gain)
 {
+    quiet_for_ = 0.0;
     if (!is_running_)
     {
         return;

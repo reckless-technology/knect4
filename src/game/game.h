@@ -82,21 +82,23 @@ class Game
     bool IsMovePossible(int column) const;
 
     /**
-     * A piece of `player`'s dropped into `column`, which has room.
+     * A piece of `player`'s dropped into `column`, which must have room; a column off the board or full is left alone
+     * (and asserts in a debug build).
      * @param column The column.
      * @param player kMax or kMin.
      */
     void DoMove(int column, int player);
 
     /**
-     * The top piece of `column`, which holds one, taken back.
+     * The top piece of `column`, which must hold one, taken back; a column off the board or empty is left alone (and
+     * asserts in a debug build).
      * @param column The column.
      */
     void UndoMove(int column);
 
     /**
-     * @param column The column.
-     * @param row The row.
+     * @param column The column, on the board.
+     * @param row The row, on the board.
      * @return What is in the slot: kMax, kMin or kEmpty.
      */
     int At(int column, int row) const;
@@ -114,7 +116,7 @@ class Game
      * Whether the piece `player` has just dropped into `column` made four in a row.
      * @param column The column of the piece just played.
      * @param player Whose piece it is.
-     * @return Whether it won.
+     * @return Whether it won; false for an empty column or one off the board.
      */
     bool IsWinningMove(int column, int player) const;
 
@@ -138,8 +140,8 @@ class Game
      * What a piece of `player`'s in `column` is worth: the score (kScores) of the line it stands in, summed over the
      * four directions, each line counted to at most four.
      * @param column The column.
-     * @param has_move_been_made True when the piece is already the column's top piece; false for the slot it would
-     *        drop into, which must be on the board.
+     * @param has_move_been_made True when the piece is already the column's top piece, which must be there; false for
+     *        the slot it would drop into, which must be on the board (the column has room).
      * @param player Whose piece.
      * @return The score; kWinningScore or more for a four.
      */
@@ -154,13 +156,14 @@ class Game
 
     /**
      * Negamax from `player`'s side, `depth` plies beyond this one.
-     * @param depth The plies left; 0 scores each move by EvaluateBoard.
+     * @param depth The plies left, 0 or more; 0 scores each move by EvaluateBoard.
      * @param alpha The window's lower edge.
      * @param beta Its upper edge.
      * @param do_alpha_beta False to search every move, with no pruning (the same answer, slower).
      * @param player The side to move.
      * @param best_move Set to the best move's column when one raises alpha; else left as it was.
-     * @param stop Read at each node: once true, every node returns 0 and the answer means nothing; may be null.
+     * @param stop Read as each node is entered: once true, every node entered after returns 0 at once and those under
+     *        way finish with what they have, so the answer and `best_move` mean nothing; may be null.
      * @return The score from `player`'s side.
      */
     int Negamax(int depth, int alpha, int beta, bool do_alpha_beta, int player, int &best_move,
@@ -170,8 +173,9 @@ class Game
      * The search the computer moves by: Negamax with the full window and pruning.
      * @param depth The plies beyond the move: Easy 3, Medium 7, Hard 11.
      * @param player The side to move.
-     * @param best_move Set to the column to play.
-     * @param stop Read at each node: once true the search ends and its answer means nothing; may be null.
+     * @param best_move Set to the column to play; left as it was on a full board or when `stop` is already set.
+     * @param stop Read as each node is entered: once true the search winds up at once and its answer and `best_move`
+     *        mean nothing; may be null.
      * @return The move's score from `player`'s side.
      */
     int NextMove(int depth, int player, int &best_move, const std::atomic<bool> *stop = nullptr);

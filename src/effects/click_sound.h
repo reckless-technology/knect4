@@ -82,10 +82,10 @@ class ClickMixer
     /** A click sounding. */
     struct Voice
     {
-        int   sound{-1};   ///< Which; -1 for none.
-        int   position{0}; ///< The next sample.
-        float gain{0.0f};  ///< How loud.
-        int   age{0};      ///< When it started, counted in clicks.
+        int      sound{-1};   ///< Which; -1 for none.
+        int      position{0}; ///< The next sample.
+        float    gain{0.0f};  ///< How loud.
+        unsigned age{0};      ///< When it started, counted in clicks.
     };
 
     std::vector<std::vector<float>> sounds_;      ///< The sounds.
@@ -93,7 +93,7 @@ class ClickMixer
     std::atomic<unsigned>           written_{0};  ///< Requests written, by the asking thread.
     std::atomic<unsigned>           read_{0};     ///< Requests taken, by the audio thread.
     std::array<Voice, kVoices>      voices_{};    ///< The clicks sounding.
-    int                             started_{0};  ///< Clicks started, for the voices' ages.
+    unsigned                        started_{0};  ///< Clicks started, for the voices' ages; wraps after 2^32.
     std::atomic<int>                sounding_{0}; ///< The voices in use after the last block.
 };
 

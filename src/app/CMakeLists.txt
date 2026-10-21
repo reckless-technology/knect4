@@ -67,3 +67,14 @@ if(KNECT4_BUILD_TESTS)
     add_test(NAME app_smoke COMMAND Knect4 --smoke)
     set_tests_properties(app_smoke PROPERTIES LABELS window RESOURCE_LOCK display TIMEOUT 120)
 endif()
+
+if(KNECT4_BUILD_TESTS)
+    # The render tool drawing every state it knows, and the icon, into the build tree: each must write its picture.
+    foreach(state mid drop won lost empty friend friend-won)
+        add_test(NAME render_${state} COMMAND knect4_render "${CMAKE_CURRENT_BINARY_DIR}/render_${state}.png" ${state})
+    endforeach()
+    add_test(NAME render_icon COMMAND knect4_render "${CMAKE_CURRENT_BINARY_DIR}/render_icon.png" icon 64)
+    # With no file to write, it says how it is used and fails.
+    add_test(NAME render_usage COMMAND knect4_render)
+    set_tests_properties(render_usage PROPERTIES WILL_FAIL TRUE)
+endif()

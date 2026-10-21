@@ -40,6 +40,10 @@ class Noise
     /** @param seed Where it starts. */
     explicit Noise(std::uint32_t seed) : state_(seed * 2654435761u + 0x9e3779b9u)
     {
+        if (state_ == 0)
+        {
+            state_ = 0x9e3779b9u; // xorshift stays at 0 from 0
+        }
     }
 
     /** @return The next number, from -1 to 1. */
@@ -144,7 +148,8 @@ bool ClickMixer::Trigger(int sound, float gain) noexcept
     {
         return false;
     }
-    queue_[written % kQueueSize] = {sound, std::clamp(gain, 0.0f, 1.0f)};
+    // Held to 0 to 1; a gain that is not a number is silence rather than a number the output would carry.
+    queue_[written % kQueueSize] = {sound, gain >= 0.0f ? std::min(gain, 1.0f) : 0.0f};
     written_.store(written + 1, std::memory_order_release);
     return true;
 }

@@ -32,8 +32,10 @@ class DropMotion
     };
 
     /**
-     * A fall from rest.
-     * @param rest How far below where it was let go it comes to rest, in rows; more than 0.
+     * A fall from rest. A rest that is not a number, or 0 or less, is no fall: at rest at once. Physics that could not
+     * end - gravity that is not more than 0, a restitution outside 0 to under 1, a least rebound that is not more than
+     * 0, or any of them not a number - are replaced by the usual.
+     * @param rest How far below where it was let go it comes to rest, in rows.
      * @param physics How it falls.
      */
     explicit DropMotion(double rest, Physics physics);

@@ -94,3 +94,50 @@ TEST(SettingsFile, LivesInTheSuitesFolder)
 
 } // namespace
 } // namespace knect4::app
+
+namespace knect4::app
+{
+namespace
+{
+
+TEST_F(SettingsFileTest, KeepsTheChoicesAsTheyChangeAndOnlyThen)
+{
+    const std::filesystem::path file = folder_ / "kept.json";
+    Settings                    earlier;
+    earlier.level = Level::kHard;
+    ASSERT_TRUE(WriteSettings(file, earlier));
+
+    SettingsKeeper keeper(file);
+    Settings       now = keeper.Read();
+    EXPECT_EQ(now, earlier);
+    // The first call reports a change, for the menu to be set, but the choices just read need no writing.
+    EXPECT_TRUE(keeper.Changed(now));
+    EXPECT_EQ(keeper.writes(), 0);
+    EXPECT_FALSE(keeper.Changed(now));
+    now.has_sound = false;
+    EXPECT_TRUE(keeper.Changed(now));
+    EXPECT_EQ(keeper.writes(), 1);
+    EXPECT_FALSE(ReadSettings(file).has_sound);
+    EXPECT_FALSE(keeper.Changed(now));
+    EXPECT_EQ(keeper.writes(), 1);
+}
+
+TEST(SettingsKeeper, KeepsNothingWithNoFile)
+{
+    // A launch's check: the defaults, a change reported for the menu, nothing written anywhere.
+    SettingsKeeper keeper({});
+    Settings       now = keeper.Read();
+    EXPECT_EQ(now, Settings{});
+    EXPECT_TRUE(keeper.Changed(now));
+    now.level = Level::kEasy;
+    EXPECT_TRUE(keeper.Changed(now));
+    EXPECT_EQ(keeper.writes(), 0);
+
+    // Never read: the first choices seen are reported and not written.
+    SettingsKeeper unread({});
+    EXPECT_TRUE(unread.Changed(Settings{}));
+    EXPECT_FALSE(unread.Changed(Settings{}));
+}
+
+} // namespace
+} // namespace knect4::app

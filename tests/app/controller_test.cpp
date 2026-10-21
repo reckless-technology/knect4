@@ -22,6 +22,14 @@ class Clicks final : public ClickSink
         heard.push_back({landing, gain});
     }
 
+    /** A puck has started to fall. */
+    void Prepare() override
+    {
+        ++prepares;
+    }
+
+    int prepares{0}; ///< The falls made ready for.
+
     /** One click. */
     struct Heard
     {
@@ -194,8 +202,14 @@ TEST(Controller, StepsPastAFullColumn)
     controller.PlaceMoves({4, 4, 4, 4, 4, 4});
     ASSERT_EQ(controller.phase(), Phase::kPersonToMove);
     controller.Hover(3);
+    controller.Frame(0.25);
+    ASSERT_TRUE(controller.Picture().held.has_value());
+    EXPECT_EQ(controller.Picture().held->landing_column, 3);
     controller.Step(1);
-    EXPECT_EQ(controller.Picture().held.has_value() ? controller.Picture().held->landing_column : 5, 5);
+    ASSERT_TRUE(controller.Picture().held.has_value());
+    EXPECT_EQ(controller.Picture().held->landing_column, 5);
+    controller.Step(-1);
+    EXPECT_EQ(controller.Picture().held->landing_column, 3);
     EXPECT_FALSE(controller.Drop(4));
 
     // Off the board, the held puck fades away.
@@ -207,6 +221,71 @@ TEST(Controller, StepsPastAFullColumn)
     EXPECT_FALSE(controller.Picture().held.has_value());
 }
 
+TEST(Controller, StopsAtTheEdgeRatherThanWrapping)
+{
+    Controller controller(nullptr);
+    // Column 6 full: a step right from 5 stays at 5; column 0 full: a step left from 1 stays at 1.
+    controller.PlaceMoves({6, 6, 6, 6, 6, 6, 0, 0, 0, 0, 0, 0});
+    ASSERT_EQ(controller.phase(), Phase::kPersonToMove);
+    controller.Hover(5);
+    controller.Frame(0.25);
+    controller.Step(1);
+    ASSERT_TRUE(controller.Picture().held.has_value());
+    EXPECT_EQ(controller.Picture().held->landing_column, 5);
+    controller.Hover(1);
+    controller.Step(-1);
+    EXPECT_EQ(controller.Picture().held->landing_column, 1);
+}
+
+TEST(Controller, MovesAPuckHeldOverAFilledColumnToTheNearestWithRoom)
+{
+    // The person's puck was held over column 3 when it filled: the next turn holds it over 4, the nearer with room.
+    Controller controller(nullptr);
+    controller.Hover(3);
+    controller.PlaceMoves({3, 3, 3, 3, 3, 3});
+    ASSERT_EQ(controller.phase(), Phase::kPersonToMove);
+    controller.Frame(0.25);
+    ASSERT_TRUE(controller.Picture().held.has_value());
+    EXPECT_EQ(controller.Picture().held->landing_column, 4);
+    EXPECT_TRUE(controller.DropHeld());
+}
+
+TEST(Controller, ClicksAPuckLandingOnAnotherAndMakesReadyAsItFalls)
+{
+    Clicks     clicks;
+    Controller controller(&clicks);
+    controller.PlaceMoves({2, 5});
+    ASSERT_TRUE(controller.Drop(2));
+    EXPECT_EQ(clicks.prepares, 1);
+    ASSERT_TRUE(RunUntil(controller, [&] { return controller.phase() != Phase::kDropping; }));
+    ASSERT_FALSE(clicks.heard.empty());
+    EXPECT_EQ(clicks.heard[0].landing, LandingOn::kPuck);
+    // From one row up, a shorter fall: a softer first click than one to the base.
+    EXPECT_LT(clicks.heard[0].gain, 1.0f);
+
+    // With the sound off, nothing is made ready.
+    controller.SetSound(false);
+    controller.PlaceMoves({});
+    ASSERT_TRUE(controller.Drop(0));
+    EXPECT_EQ(clicks.prepares, 1);
+}
+
+TEST(Controller, LetsTheComputerWinThroughItsOwnTurn)
+{
+    // The computer, starting, has three in column 6 and the person three spread: it takes the fourth itself.
+    Settings settings;
+    settings.level             = Level::kEasy;
+    settings.does_person_start = false;
+    Controller controller(nullptr, settings);
+    controller.PlaceMoves({6, 0, 6, 2, 6, 4});
+    ASSERT_EQ(controller.phase(), Phase::kComputerThinking);
+    ASSERT_TRUE(RunUntil(controller, [&] { return controller.IsOver(); }));
+    EXPECT_EQ(controller.winner(), kMax);
+    EXPECT_EQ(controller.game().At(6, 3), kMax);
+    EXPECT_EQ(controller.score().max_wins, 1);
+    EXPECT_EQ(controller.StatusText(), "I win");
+}
+
 TEST(Controller, StopsAThinkingComputerForANewGame)
 {
     Settings settings;
@@ -214,7 +293,10 @@ TEST(Controller, StopsAThinkingComputerForANewGame)
     settings.does_person_start = false;
     Controller controller(nullptr, settings);
     controller.SetPersonStarts(true);
-    controller.NewGame(); // the hard search stopped and waited for
+    // The hard search is stopped and waited for: at once, not when it would have finished.
+    const auto start = std::chrono::steady_clock::now();
+    controller.NewGame();
+    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(2));
     EXPECT_EQ(controller.phase(), Phase::kPersonToMove);
 }
 
@@ -406,6 +488,145 @@ TEST(Menus, OfferAFriendAndDimWhatTwoPlayersDoNotUse)
 
     RunCommand(kAgainstComputer, controller, {});
     EXPECT_FALSE(controller.settings().is_two_player);
+}
+
+} // namespace
+} // namespace knect4::app
+
+namespace knect4::app
+{
+namespace
+{
+
+TEST(Controller, IgnoresStepsAndDropsOutOfTurn)
+{
+    Controller controller(nullptr);
+    controller.Hover(2);
+    ASSERT_TRUE(controller.Drop(2));
+    controller.Step(1); // the puck is falling: no one holds one
+    EXPECT_FALSE(controller.Drop(3));
+    EXPECT_FALSE(controller.DropHeld());
+    EXPECT_EQ(controller.MovesMade(), 1);
+}
+
+TEST(Controller, PlacesOnlyTheMovesThatFit)
+{
+    Controller controller(nullptr);
+    // Seven into a column of six: the seventh is left out, and after six it is the person's turn again.
+    controller.PlaceMoves({0, 0, 0, 0, 0, 0, 0});
+    EXPECT_EQ(controller.MovesMade(), 6);
+    EXPECT_EQ(controller.game().ColumnHeight(0), 6);
+    EXPECT_EQ(controller.phase(), Phase::kPersonToMove);
+
+    // No moves with the computer starting: its search starts afresh.
+    Settings computer_first;
+    computer_first.does_person_start = false;
+    Controller second(nullptr, computer_first);
+    second.PlaceMoves({});
+    EXPECT_EQ(second.phase(), Phase::kComputerThinking);
+    EXPECT_EQ(second.StatusText(), "Thinking…");
+}
+
+TEST(Controller, ShowsTheComputersPuckAsItAimsAndFalls)
+{
+    Settings settings;
+    settings.level             = Level::kEasy;
+    settings.does_person_start = false;
+    Controller controller(nullptr, settings);
+    ASSERT_TRUE(RunUntil(controller, [&] { return controller.phase() != Phase::kComputerThinking; }));
+    if (controller.phase() == Phase::kComputerAiming)
+    {
+        const BoardPicture aiming = controller.Picture();
+        ASSERT_TRUE(aiming.held.has_value());
+        EXPECT_EQ(aiming.held->player, kMax);
+        EXPECT_EQ(controller.StatusText(), "Thinking…");
+    }
+    ASSERT_TRUE(RunUntil(controller, [&] { return controller.phase() == Phase::kDropping; }));
+    EXPECT_EQ(controller.StatusText(), "Thinking…");
+    EXPECT_FALSE(controller.Picture().held.has_value());
+}
+
+TEST(Controller, GlowsAfterTheGameAndColoursTheBannerByWhoWon)
+{
+    Controller controller(nullptr);
+    controller.PlaceMoves({0, 3, 0, 3, 1, 3, 6, 3});
+    ASSERT_EQ(controller.winner(), kMax);
+    const float first = controller.Picture().glow;
+    controller.Frame(0.3);
+    EXPECT_NE(controller.Picture().glow, first);
+    EXPECT_EQ(controller.Picture().banner_colour, theme::kBad);
+    EXPECT_EQ(controller.Picture().winning.size(), 4u);
+
+    controller.PlaceMoves({0, 0, 1, 1, 2, 2, 3});
+    EXPECT_EQ(controller.Picture().banner_colour, theme::kGood);
+
+    controller.PlaceMoves({2, 0, 2, 0, 0, 1, 0, 0, 4, 0, 4, 1, 1, 2, 1, 1, 5, 1, 5, 2, 2,
+                           3, 2, 3, 3, 4, 3, 3, 6, 3, 6, 4, 4, 5, 4, 5, 5, 6, 5, 6, 6, 6});
+    EXPECT_EQ(controller.Picture().banner_colour, theme::kInk);
+    EXPECT_TRUE(controller.Picture().winning.empty());
+    EXPECT_EQ(controller.winner(), kEmpty);
+}
+
+TEST(TwoPlayers, NameWhoseTurnWhileAPuckFallsAndCallADraw)
+{
+    Settings two;
+    two.is_two_player = true;
+    Controller controller(nullptr, two);
+    ASSERT_TRUE(controller.Drop(3));
+    EXPECT_EQ(controller.StatusText(), "Red to move");
+    ASSERT_TRUE(RunUntil(controller, [&] { return controller.phase() != Phase::kDropping; }));
+    ASSERT_TRUE(controller.Drop(3));
+    EXPECT_EQ(controller.StatusText(), "Yellow to move");
+
+    controller.PlaceMoves({2, 0, 2, 0, 0, 1, 0, 0, 4, 0, 4, 1, 1, 2, 1, 1, 5, 1, 5, 2, 2,
+                           3, 2, 3, 3, 4, 3, 3, 6, 3, 6, 4, 4, 5, 4, 5, 5, 6, 5, 6, 6, 6});
+    EXPECT_EQ(controller.phase(), Phase::kDrawn);
+    EXPECT_EQ(controller.StatusText(), "A draw");
+    EXPECT_EQ(controller.score().drawn, 1);
+}
+
+TEST(Menus, CarryOutEveryChoice)
+{
+    Controller controller(nullptr);
+    RunCommand(kEasy, controller, {});
+    EXPECT_EQ(controller.settings().level, Level::kEasy);
+    RunCommand(kMedium, controller, {});
+    EXPECT_EQ(controller.settings().level, Level::kMedium);
+    RunCommand(kYellowPucks, controller, {});
+    RunCommand(kRedPucks, controller, {});
+    EXPECT_TRUE(controller.settings().is_person_red);
+    RunCommand(kComputerStarts, controller, {});
+    RunCommand(kPersonStarts, controller, {});
+    EXPECT_TRUE(controller.settings().does_person_start);
+    RunCommand(kSound, controller, {});
+    RunCommand(kSound, controller, {});
+    EXPECT_TRUE(controller.settings().has_sound);
+    RunCommand(kQuit, controller, {}); // no one to tell: nothing happens
+    RunCommand(kNoCommand, controller, {});
+    RunCommand(999, controller, {});
+    EXPECT_EQ(controller.phase(), Phase::kPersonToMove);
+}
+
+TEST(Controller, MakesNoDemandsOfASinkThatOnlyClicks)
+{
+    // A sink that only hears clicks takes the default of making nothing ready.
+    class OnlyClicks final : public ClickSink
+    {
+      public:
+        void Click(LandingOn landing, float gain) override
+        {
+            static_cast<void>(landing);
+            static_cast<void>(gain);
+            ++count;
+        }
+
+        int count{0}; ///< Clicks heard.
+    } clicks;
+
+    Controller controller(&clicks);
+    ASSERT_TRUE(controller.Drop(0));
+    ASSERT_TRUE(RunUntil(controller, [&] { return controller.phase() != Phase::kDropping; }));
+    EXPECT_GT(clicks.count, 0);
 }
 
 } // namespace

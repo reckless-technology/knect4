@@ -1,42 +1,115 @@
 {
     "version": 6,
-    "cmakeMinimumRequired": {"major": 3, "minor": 25, "patch": 0},
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
     "configurePresets": [
         {
             "name": "base",
             "hidden": true,
             "binaryDir": "${sourceDir}/build/${presetName}",
             "generator": "Ninja",
-            "cacheVariables": {"KNECT4_BUILD_TESTS": "ON"}
+            "cacheVariables": {
+                "KNECT4_BUILD_TESTS": "ON"
+            }
         },
         {
             "name": "debug",
             "displayName": "Debug: the game and its suites, unoptimised, with the debugger's information",
             "inherits": "base",
-            "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug"}
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
         },
         {
             "name": "release",
             "displayName": "Release: the game as it ships, and its suites",
             "inherits": "base",
-            "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
         },
         {
             "name": "release-universal",
             "displayName": "Release, macOS: one binary for Apple silicon and Intel",
             "inherits": "release",
-            "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin"},
-            "cacheVariables": {"CMAKE_OSX_ARCHITECTURES": "arm64;x86_64"}
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Darwin"
+            },
+            "cacheVariables": {
+                "CMAKE_OSX_ARCHITECTURES": "arm64;x86_64"
+            }
+        },
+        {
+            "name": "coverage-windows",
+            "displayName": "Coverage, Windows: the game's own code unoptimised under clang-cl, LLVM source-based",
+            "inherits": "base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_C_COMPILER": "clang-cl",
+                "CMAKE_CXX_COMPILER": "clang-cl",
+                "KNECT4_COVERAGE": "ON"
+            }
         }
     ],
     "buildPresets": [
-        {"name": "debug", "configurePreset": "debug"},
-        {"name": "release", "configurePreset": "release"},
-        {"name": "release-universal", "configurePreset": "release-universal"}
+        {
+            "name": "debug",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "release",
+            "configurePreset": "release"
+        },
+        {
+            "name": "release-universal",
+            "configurePreset": "release-universal"
+        },
+        {
+            "name": "coverage-windows",
+            "configurePreset": "coverage-windows"
+        }
     ],
     "testPresets": [
-        {"name": "debug", "configurePreset": "debug", "output": {"outputOnFailure": true}},
-        {"name": "release", "configurePreset": "release", "output": {"outputOnFailure": true}},
-        {"name": "release-universal", "configurePreset": "release-universal", "output": {"outputOnFailure": true}}
+        {
+            "name": "debug",
+            "configurePreset": "debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "release",
+            "configurePreset": "release",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "release-universal",
+            "configurePreset": "release-universal",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "coverage-windows",
+            "configurePreset": "coverage-windows",
+            "output": {
+                "outputOnFailure": true
+            },
+            "environment": {
+                "LLVM_PROFILE_FILE": "${sourceDir}/build/coverage-windows/profiles/%p-%m.profraw"
+            }
+        }
     ]
 }

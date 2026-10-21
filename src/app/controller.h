@@ -73,6 +73,14 @@ class ClickSink
     virtual ~ClickSink() = default;
 
     /**
+     * A puck has started to fall and will land in a moment: the place to make ready to sound, which a fall gives
+     * time for. Nothing by default.
+     */
+    virtual void Prepare()
+    {
+    }
+
+    /**
      * A puck has landed.
      * @param landing What on.
      * @param gain How loud, 0 to 1, by how fast it hit.
@@ -130,7 +138,8 @@ class Controller
     bool Drop(int column);
 
     /**
-     * The person's held puck a column over, to the nearest column with room that way.
+     * The person's held puck a column over, to the nearest column with room that way; where none that way has room it
+     * stays where it is. It never wraps round the board's edge.
      * @param delta -1 for left, 1 for right.
      */
     void Step(int delta);
@@ -240,6 +249,9 @@ class Controller
     /** @return The score of the kind of game being played, to count a result in. */
     Score &CurrentScore() noexcept;
 
+    /** @return How far the thinking computer's puck sways from where it hangs now, in columns. */
+    float Sway() const noexcept;
+
     /**
      * A puck of `player`'s dropped into `column` from where the held puck hangs.
      * @param column The column, with room.
@@ -254,12 +266,20 @@ class Controller
     void StopSearch();
 
     /**
-     * The column nearest `from` with room, `delta` at a time, or `from` where none has.
+     * The first column with room from `from` on, `delta` at a time, up to the board's edge.
      * @param from Where to begin.
-     * @param delta The step.
+     * @param delta The step, -1 or 1.
+     * @return The column, or -1 where none that way has room.
+     */
+    int OpenColumnFrom(int from, int delta) const;
+
+    /**
+     * The column with room nearest `column`, the right one first of two as near; `column` itself where it has room or
+     * none has.
+     * @param column A column on the board.
      * @return The column.
      */
-    int NearestOpenColumn(int from, int delta) const;
+    int NearestOpenColumn(int column) const;
 
     ClickSink *clicks_;                      ///< Where the clicks go; may be null.
     Settings   settings_;                    ///< The person's choices.

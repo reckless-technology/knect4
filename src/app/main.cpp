@@ -18,10 +18,8 @@
 #include "SkiaCanvas.h"
 #include "Window.h"
 
-#include <cstdio>
 #include <filesystem>
 #include <memory>
-#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -43,16 +41,13 @@ int main(int argc, char **argv)
     const std::unique_ptr<reckless::app::AppPlatform> platform =
         reckless::app::AppPlatform::Create("Knect 4", reckless::embedded::Find("icon_256.png"));
 
-    // The clicks on the system's output; none in a launch's check, which may run where there is no output.
+    // The clicks on the system's output, opened as the first puck falls (click_player.h); none in a launch's check,
+    // which may run where there is no output.
     knect4::app::ClickPlayer clicks;
-    if (!options.is_smoke && !clicks.Open())
-    {
-        std::fprintf(stderr, "Knect 4: no sound (%s)\n", clicks.error().c_str());
-    }
     // The person's choices as they left them (settings_file.h); a launch's check reads and keeps none.
-    const std::filesystem::path settings_file =
-        options.is_smoke ? std::filesystem::path() : knect4::app::DefaultSettingsFile();
-    knect4::app::Controller controller(options.is_smoke ? nullptr : &clicks, knect4::app::ReadSettings(settings_file));
+    knect4::app::SettingsKeeper settings(options.is_smoke ? std::filesystem::path()
+                                                          : knect4::app::DefaultSettingsFile());
+    knect4::app::Controller     controller(options.is_smoke ? nullptr : &clicks, settings.Read());
 
     MainView view;
     if (!platform->HasNativeMenuBar())
@@ -60,21 +55,13 @@ int main(int argc, char **argv)
         view.SetMenuBarView(platform->MakeMenuBarView(knect4::app::theme::MenuBarLook()));
     }
     const auto quit = [&platform] { platform->CallSoon([&platform] { platform->Quit(); }); };
-    // Whenever a choice changes: the menu bar set again with its ticks, and the choices kept.
-    std::optional<knect4::app::Settings> shown_settings;
-    const auto                           settings_changed = [&] {
-        const knect4::app::Settings &now = controller.settings();
-        if (shown_settings == now)
+    // Whenever a choice changes: the choices kept, and the menu bar set again with its ticks.
+    const auto settings_changed = [&] {
+        if (settings.Changed(controller.settings()))
         {
-            return;
+            platform->SetMenuBar(knect4::app::BuildMenuBar(controller.settings()),
+                                 [&](int command) { knect4::app::RunCommand(command, controller, quit); });
         }
-        if (shown_settings)
-        {
-            knect4::app::WriteSettings(settings_file, now);
-        }
-        shown_settings = now;
-        platform->SetMenuBar(knect4::app::BuildMenuBar(now),
-                             [&](int command) { knect4::app::RunCommand(command, controller, quit); });
     };
 
     knect4::app::BoardView &board = view.board();

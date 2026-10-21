@@ -64,8 +64,12 @@ build/release/src/app/Knect4.exe
 `-DKNECT4_GUI=OFF` builds the game and its suites alone, with no submodule. VS Code's default build task builds the
 Debug configuration, its test task runs the suites, and the "Knect 4" launch entry starts it under the debugger.
 
-- `build/release/src/app/knect4_render <out.png> [mid|drop|won|lost|friend|friend-won]` draws the window in that state
-  to a PNG; `docs/images/` holds its pictures.
+- `build/release/src/app/knect4_render <out.png> [mid|drop|won|lost|empty|friend|friend-won]` draws the window in that
+  state to a PNG, and `knect4_render <out.png> icon <size>` the icon; `docs/images/` holds its pictures. The suites run
+  it for every state.
+- `powershell -ExecutionPolicy Bypass -File tools\coverage-windows.ps1` measures the line coverage of `src/` (clang-cl
+  and LLVM's source-based coverage, the `coverage-windows` preset) over every suite, the window's launch and the render
+  tool's runs, and fails under 95 %; `src/app/main.cpp`, which opens the window and the event loop, is left out.
 - `python tools/make_icon.py build/release/src/app/knect4_render.exe` draws the icon at every size into
   `assets/icon/` (Pillow); the build takes them from there and needs no Python.
 - C++ is formatted with clang-format 22.1.8 (`.clang-format`), which the pre-commit hook and CI check. In a fresh clone:
@@ -75,8 +79,11 @@ Debug configuration, its test task runs the suites, and the "Knect 4" launch ent
 
 `.github/workflows/build.yml`, on the organisation's self-hosted runners (the repository is private): Windows with MSVC
 builds everything, runs every suite including the window's launch, and keeps `Knect4.exe` as the run's artifact
-`knect4-windows` for 30 days; a Linux job checks the formatting. The toolkit submodule is read through its read-only
-deploy key, the secret `RECKLESS_TOOLKIT_DEPLOY_KEY`.
+`knect4-windows` for 30 days; a second Windows job measures the line coverage (`tools/coverage-windows.ps1`) and fails
+under 95 %, its report kept as `knect4-coverage`; a Linux job checks the formatting. A newer push to a pull request
+cancels its older run; every commit on `main` keeps its own. The toolkit submodule is read through its read-only
+deploy key, the secret `RECKLESS_TOOLKIT_DEPLOY_KEY`. The toolkit's own CI builds the game's library on Linux at
+every toolkit change (its consumers job), which is the only Linux build; macOS is not built yet.
 
 ## History
 

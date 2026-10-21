@@ -8,7 +8,7 @@ if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 
-# Knect 4: four in a row against the computer. The game's rules, evaluation and search (src/game) and the drop's
+# Knect 4: four in a row against the computer or between two people. The game's rules, evaluation and search (src/game) and the drop's
 # motion and click (src/effects) need nothing else; the window (src/app) is drawn with Skia on reckless-toolkit, a git
 # submodule at external/reckless-toolkit, and plays its clicks through the toolkit's audio device layer.
 
@@ -39,6 +39,7 @@ endif()
 
 option(KNECT4_BUILD_TESTS "Build the test suites" ON)
 option(KNECT4_GUI "Build the window on the toolkit submodule (external/reckless-toolkit)" ON)
+option(KNECT4_COVERAGE "Instrument the game's own code for coverage (gcc, clang or clang-cl)" OFF)
 
 # The strict warning set on every compiler, for the game's own targets. Not errors: a new compiler must not break the
 # build; the code is kept warning-free on gcc, clang and MSVC, and CI's logs are the check.
@@ -47,6 +48,31 @@ if(KNECT4_MSVC_FRONTEND)
     target_compile_options(knect4_warnings INTERFACE /W4 /permissive-)
 else()
     target_compile_options(knect4_warnings INTERFACE -Wall -Wextra -Wpedantic)
+endif()
+
+# Coverage of the game's own code alone: the flags ride on knect4_warnings, which every target of the game links and
+# neither the toolkit nor GoogleTest does. clang and clang-cl count with LLVM's source-based coverage, read by llvm-cov
+# (tools/coverage-windows.ps1 on Windows); clang-cl links through the MSVC linker, which takes no compiler flag, so the
+# objects name clang's profile runtime themselves and the linker is shown where it lies.
+if(KNECT4_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(knect4_warnings INTERFACE --coverage -O0)
+        target_link_options(knect4_warnings INTERFACE --coverage)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND KNECT4_MSVC_FRONTEND)
+        target_compile_options(knect4_warnings INTERFACE -fprofile-instr-generate -fcoverage-mapping /Od)
+        execute_process(COMMAND "${CMAKE_CXX_COMPILER}" /clang:-print-resource-dir
+                        OUTPUT_VARIABLE clang_resource_dir OUTPUT_STRIP_TRAILING_WHITESPACE)
+        file(TO_CMAKE_PATH "${clang_resource_dir}" clang_resource_dir)
+        if(NOT EXISTS "${clang_resource_dir}/lib/windows")
+            message(FATAL_ERROR "clang-cl's profile runtime is not under ${clang_resource_dir}/lib/windows")
+        endif()
+        target_link_directories(knect4_warnings INTERFACE "${clang_resource_dir}/lib/windows")
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(knect4_warnings INTERFACE -fprofile-instr-generate -fcoverage-mapping -O0)
+        target_link_options(knect4_warnings INTERFACE -fprofile-instr-generate)
+    else()
+        message(FATAL_ERROR "KNECT4_COVERAGE needs gcc, clang or clang-cl, not ${CMAKE_CXX_COMPILER_ID}")
+    endif()
 endif()
 
 # The version every binary reports, from project() above.
@@ -64,6 +90,16 @@ if(KNECT4_BUILD_TESTS)
         URL_HASH SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c)
     FetchContent_MakeAvailable(googletest)
     include(GoogleTest)
+    # googletest compiles its own two libraries under its own strict set (/WX on clang-cl), where clang 21's
+    # -Wcharacter-conversion meets its char8_t printer in gtest-printers.h: googletest's to fix, so those two let it pass.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        include(CheckCXXCompilerFlag)
+        check_cxx_compiler_flag(-Wcharacter-conversion KNECT4_CLANG_KNOWS_CHARACTER_CONVERSION)
+        if(KNECT4_CLANG_KNOWS_CHARACTER_CONVERSION)
+            target_compile_options(gtest PRIVATE -Wno-character-conversion)
+            target_compile_options(gtest_main PRIVATE -Wno-character-conversion)
+        endif()
+    endif()
 endif()
 
 if(KNECT4_GUI)

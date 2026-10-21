@@ -88,6 +88,8 @@ void Controller::BeginPersonTurn(int player)
 {
     phase_ = Phase::kPersonToMove;
     mover_ = player;
+    // A puck held over a column filled since is moved to the nearest that has room, so the keys drop it at once.
+    held_target_ = NearestOpenColumn(std::clamp(held_target_, 0, game_.width() - 1));
     // The person's puck appears where the pointer is, fading in, rather than gliding over from the computer's.
     held_column_  = static_cast<float>(held_target_);
     held_opacity_ = 0.0f;
@@ -119,17 +121,31 @@ void Controller::StopSearch()
     }
 }
 
-int Controller::NearestOpenColumn(int from, int delta) const
+int Controller::OpenColumnFrom(int from, int delta) const
 {
-    for (int step = 0; step != game_.width(); ++step)
+    for (int column = from; column >= 0 && column < game_.width(); column += delta)
     {
-        const int column = ((from + delta * step) % game_.width() + game_.width()) % game_.width();
         if (game_.IsMovePossible(column))
         {
             return column;
         }
     }
-    return from;
+    return -1;
+}
+
+int Controller::NearestOpenColumn(int column) const
+{
+    for (int distance = 0; distance != game_.width(); ++distance)
+    {
+        for (const int candidate : {column + distance, column - distance})
+        {
+            if (game_.IsMovePossible(candidate))
+            {
+                return candidate;
+            }
+        }
+    }
+    return column;
 }
 
 void Controller::Hover(int column)
@@ -160,8 +176,13 @@ void Controller::Step(int delta)
     {
         return;
     }
-    const int from = is_held_shown_ ? held_target_ + delta : held_target_;
-    held_target_   = NearestOpenColumn(std::clamp(from, 0, game_.width() - 1), delta < 0 ? -1 : 1);
+    const int step = delta < 0 ? -1 : 1;
+    // A puck not yet shown appears where it is if it can drop there; one shown moves at least a column.
+    const int from = is_held_shown_ ? held_target_ + step : held_target_;
+    if (const int column = OpenColumnFrom(from, step); column >= 0)
+    {
+        held_target_ = column;
+    }
     is_held_shown_ = true;
 }
 
@@ -211,6 +232,10 @@ void Controller::StartDrop(int column, int player)
     falling_player_ = player;
     motion_.emplace(FallTo(row));
     phase_ = Phase::kDropping;
+    if (clicks_ != nullptr && settings_.has_sound)
+    {
+        clicks_->Prepare(); // the fall takes long enough for the output to open
+    }
     if (player == kMax)
     {
         computer_column_ = column;
@@ -269,11 +294,13 @@ void Controller::Frame(double seconds)
             search_ = {};
             if (!game_.IsMovePossible(chosen_))
             {
-                chosen_ = NearestOpenColumn(0, 1); // never: the search always finds a move on a board with room
+                chosen_ = NearestOpenColumn(game_.width() / 2); // never: the search finds a move on a board with room
             }
         }
         if (chosen_ >= 0 && turn_time_ >= kLeastThinking)
         {
+            // Aiming begins from where the swaying puck stands, so it glides on rather than jumping back first.
+            held_column_ += Sway();
             phase_ = Phase::kComputerAiming;
         }
         break;
@@ -343,6 +370,13 @@ void Controller::SetTwoPlayer(bool is_two_player)
     }
 }
 
+float Controller::Sway() const noexcept
+{
+    // A gentle sway while the computer thinks, growing in over its first third of a second.
+    const float sway = 0.12f * static_cast<float>(std::sin(turn_time_ * 2.0 * std::numbers::pi * 0.9));
+    return sway * std::min(static_cast<float>(turn_time_) * 3.0f, 1.0f);
+}
+
 Score &Controller::CurrentScore() noexcept
 {
     return settings_.is_two_player ? two_player_score_ : score_;
@@ -384,10 +418,7 @@ BoardPicture Controller::Picture() const
         }
         break;
     case Phase::kComputerThinking: {
-        // A gentle sway while it thinks.
-        const float sway = 0.12f * static_cast<float>(std::sin(turn_time_ * 2.0 * std::numbers::pi * 0.9));
-        picture.held = HeldPuck{held_column_ + sway * std::min(static_cast<float>(turn_time_) * 3.0f, 1.0f), kMax, -1,
-                                held_opacity_};
+        picture.held = HeldPuck{held_column_ + Sway(), kMax, -1, held_opacity_};
         break;
     }
     case Phase::kComputerAiming:

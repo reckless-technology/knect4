@@ -1,9 +1,9 @@
 name: build
 
 # Knect 4 built on Windows with MSVC, its suites run (the window's launch among them), and Knect4.exe kept as the
-# run's artifact; and the C++ held to clang-format 22.1.8. The repository is private, so the jobs run on the
-# organisation's self-hosted runners. The window is built on the toolkit, a private submodule read through its
-# read-only deploy key (.github/actions/toolkit).
+# run's artifact; its line coverage held to 95 %; and the C++ held to clang-format 22.1.8. The repository is private,
+# so the jobs run on the organisation's self-hosted runners. The window is built on the toolkit, a private submodule
+# read through its read-only deploy key (.github/actions/toolkit).
 on:
   push:
     branches: [main]
@@ -20,7 +20,8 @@ permissions:
 
 concurrency:
   group: build-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a pull request supersedes its run; every commit on main keeps a result of its own.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   windows:
@@ -79,6 +80,33 @@ jobs:
           name: knect4-windows
           path: build/ci/src/app/Knect4.exe
           if-no-files-found: error
+          retention-days: 30
+
+  # Line coverage of the game's own code (src/ but the app's entry point), measured as tools/coverage-windows.ps1
+  # measures it on a desk: clang-cl and LLVM's source-based coverage over every suite, the window's launch and the
+  # render tool's runs, red under 95 %. Its tree is build/coverage-windows, kept between runs; the profiles are not.
+  coverage:
+    name: Coverage (clang-cl)
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          clean: false
+      - name: The toolkit submodule
+        uses: ./.github/actions/toolkit
+        with:
+          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
+      - name: Coverage, at least 95 %
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tools/coverage-windows.ps1 -Threshold 95
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: knect4-coverage
+          path: build/coverage-windows/coverage/
+          if-no-files-found: ignore
           retention-days: 30
 
   format:

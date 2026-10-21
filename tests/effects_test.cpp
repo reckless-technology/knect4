@@ -5,7 +5,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
+#include <limits>
+#include <thread>
 #include <vector>
 
 namespace knect4
@@ -16,6 +19,7 @@ namespace
 TEST(DropMotion, FallsUnderGravityToItsRest)
 {
     DropMotion motion(5.0);
+    EXPECT_EQ(motion.rest(), 5.0);
     EXPECT_EQ(motion.position(), 0.0);
     motion.Advance(0.1);
     // Half g t squared: 90 / 2 x 0.01.
@@ -173,6 +177,110 @@ TEST(ClickMixer, KeepsEightVoicesAndDropsWhatOverflowsItsQueue)
     EXPECT_EQ(mixer.SoundingCount(), ClickMixer::kVoices);
     EXPECT_NEAR(block.channels[0][0], 0.01f * ClickMixer::kVoices, 1e-6f);
     EXPECT_TRUE(mixer.Trigger(0, 1.0f));
+}
+
+TEST(DropMotion, EndsWhateverThePhysics)
+{
+    // Physics under which a fall could never end - no least rebound, no gravity, a restitution of 1, not a number -
+    // fall as the usual physics do; a rest that is not a number is no fall at all.
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    for (DropMotion::Physics physics : {DropMotion::Physics{90.0, 0.22, 0.0}, DropMotion::Physics{0.0, 0.22, 1.6},
+                                        DropMotion::Physics{90.0, 1.0, 1.6}, DropMotion::Physics{nan, 0.22, 1.6},
+                                        DropMotion::Physics{90.0, -0.5, 1.6}, DropMotion::Physics{90.0, 0.22, nan}})
+    {
+        DropMotion motion(4.0, physics);
+        motion.Advance(10.0);
+        EXPECT_TRUE(motion.has_settled());
+        for (const DropMotion::Impact &impact : motion.TakeImpacts())
+        {
+            EXPECT_TRUE(std::isfinite(impact.speed));
+        }
+    }
+    EXPECT_TRUE(DropMotion(nan).has_settled());
+    EXPECT_TRUE(DropMotion(-3.0).has_settled());
+    EXPECT_EQ(DropMotion(nan).position(), 0.0);
+    // No restitution at all: one hit, at rest.
+    DropMotion dead(4.0, DropMotion::Physics{90.0, 0.0, 1.6});
+    dead.Advance(10.0);
+    EXPECT_EQ(dead.TakeImpacts().size(), 1u);
+}
+
+TEST(ClickMixer, SilencesAGainThatIsNotANumber)
+{
+    ClickMixer mixer;
+    mixer.SetSounds({std::vector<float>(100, 0.5f)});
+    ASSERT_TRUE(mixer.Trigger(0, std::numeric_limits<float>::quiet_NaN()));
+    ASSERT_TRUE(mixer.Trigger(0, 7.0f));
+    ASSERT_TRUE(mixer.Trigger(0, -1.0f));
+    Block block;
+    block.Render(mixer);
+    EXPECT_EQ(block.channels[0][0], 0.5f); // the 7 held to 1, the others silent
+}
+
+TEST(ClickMixer, GivesTheOldestVoiceToANewClick)
+{
+    // Eight sounds of their own level, each started in its own block, then a ninth: the first is the one cut short.
+    std::vector<std::vector<float>> sounds;
+    for (int index = 0; index != 9; ++index)
+    {
+        sounds.push_back(std::vector<float>(100000, static_cast<float>(1 << index) / 1024.0f));
+    }
+    ClickMixer mixer;
+    mixer.SetSounds(sounds);
+    Block block;
+    for (int index = 0; index != 9; ++index)
+    {
+        ASSERT_TRUE(mixer.Trigger(index, 1.0f));
+        block.Render(mixer);
+    }
+    // Sounds 1 to 8 now: 2 + 4 + ... + 256 out of 1024.
+    EXPECT_FLOAT_EQ(block.channels[0][0], static_cast<float>(510) / 1024.0f);
+    EXPECT_EQ(mixer.SoundingCount(), ClickMixer::kVoices);
+}
+
+TEST(ClickMixer, TakesClicksFromOneThreadWhileAnotherRenders)
+{
+    ClickMixer mixer;
+    mixer.SetSounds({std::vector<float>(32, 0.01f)});
+    std::atomic<bool> is_done{false};
+    std::atomic<int>  taken{0};
+    std::thread       audio([&] {
+        Block block;
+        while (!is_done.load())
+        {
+            block.Render(mixer);
+        }
+        block.Render(mixer); // what is left
+    });
+    for (int index = 0; index != 2000; ++index)
+    {
+        if (mixer.Trigger(0, 1.0f))
+        {
+            taken.fetch_add(1);
+        }
+        else
+        {
+            std::this_thread::yield();
+        }
+    }
+    is_done.store(true);
+    audio.join();
+    EXPECT_GT(taken.load(), 0);
+    EXPECT_EQ(mixer.SoundingCount(), 0);
+}
+
+TEST(ClickSound, KeepsItsNoiseAliveForTheSeedThatWouldZeroIt)
+{
+    // The seed whose generator state would start at 0, where xorshift stays: the noise still varies, the click still
+    // peaks where every click does.
+    const std::vector<float> click = RenderClick(48000, LandingOn::kPuck, 2342946166u);
+    float                    peak  = 0.0f;
+    for (const float sample : click)
+    {
+        peak = std::max(peak, std::abs(sample));
+    }
+    EXPECT_NEAR(peak, 0.8f, 1e-5f);
+    EXPECT_NE(click, RenderClick(48000, LandingOn::kPuck, 0));
 }
 
 } // namespace

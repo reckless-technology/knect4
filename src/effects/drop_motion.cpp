@@ -7,7 +7,24 @@
 namespace knect4
 {
 
-DropMotion::DropMotion(double rest, Physics physics) : rest_(std::max(rest, 0.0)), physics_(physics)
+namespace
+{
+
+/**
+ * @param physics How a puck falls.
+ * @return Whether every fall under it ends: gravity, the restitution and the least rebound finite and in range.
+ */
+bool CanEnd(const DropMotion::Physics &physics)
+{
+    return std::isfinite(physics.gravity) && physics.gravity > 0.0 && std::isfinite(physics.restitution) &&
+           physics.restitution >= 0.0 && physics.restitution < 1.0 && std::isfinite(physics.least_rebound) &&
+           physics.least_rebound > 0.0;
+}
+
+} // namespace
+
+DropMotion::DropMotion(double rest, Physics physics)
+    : rest_(std::isfinite(rest) ? std::max(rest, 0.0) : 0.0), physics_(CanEnd(physics) ? physics : Physics{})
 {
     if (rest_ == 0.0)
     {
@@ -38,7 +55,7 @@ void DropMotion::Advance(double seconds)
         ++hits_;
         position_            = rest_;
         const double rebound = speed * physics_.restitution;
-        if (rebound < physics_.least_rebound)
+        if (!(rebound >= physics_.least_rebound)) // too slow to rise from, or not a number: at rest
         {
             velocity_    = 0.0;
             has_settled_ = true;

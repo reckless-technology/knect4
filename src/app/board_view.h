@@ -63,6 +63,13 @@ class BoardView final : public reckless::view::View
     void MouseExit(const reckless::view::MouseEvent &e) override;
     void MouseDown(const reckless::view::MouseEvent &e) override;
     bool WantsKeyboardFocus() const override;
+
+    /**
+     * The board keeps the keyboard against a press on a view that takes none - every plate of the panel - so the keys
+     * still play after the panel is used.
+     * @return True.
+     */
+    bool KeepsKeyboardFocus() const override;
     bool KeyPressed(const reckless::view::KeyEvent &key) override;
 
   private:
@@ -77,7 +84,7 @@ class BoardView final : public reckless::view::View
 
     BoardPicture picture_;                  ///< What it shows.
     bool         is_play_again_lit_{false}; ///< The pointer is over "Play again".
-    int          column_under_pointer_{-1}; ///< The column last told.
+    int          column_under_pointer_{-1}; ///< The column under the pointer, -1 off the board.
 };
 
 } // namespace knect4::app
