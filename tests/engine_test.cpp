@@ -486,3 +486,112 @@ TEST(Engine, SolvesThroughItsInterface)
 
 } // namespace
 } // namespace knect4
+
+#include "game/opening_book.h"
+
+namespace knect4
+{
+namespace
+{
+
+TEST(OpeningBook, OpensInTheCentreAndFindsMirrorImages)
+{
+    const OpeningBook &book = OpeningBook::Standard();
+    ASSERT_GE(book.size(), 1u);
+    EXPECT_EQ(book.Find(std::vector<int>{}), 3);
+    // Sorted strictly by key, every column on the board.
+    for (std::size_t index = 0; index != book.size(); ++index)
+    {
+        EXPECT_GE(book.entries()[index].column, 0);
+        EXPECT_LT(book.entries()[index].column, Position::kWidth);
+        if (index != 0)
+        {
+            EXPECT_LT(book.entries()[index - 1].key, book.entries()[index].key);
+        }
+    }
+    // A position and its mirror image are filed together; the answer comes back mirrored.
+    const std::vector<int> left{3, 1};
+    const std::vector<int> right{3, 5};
+    EXPECT_EQ(OpeningBook::CanonicalKey(left).first, OpeningBook::CanonicalKey(right).first);
+    EXPECT_NE(OpeningBook::CanonicalKey(left).second, OpeningBook::CanonicalKey(right).second);
+    const std::optional<int> on_left  = book.Find(left);
+    const std::optional<int> on_right = book.Find(right);
+    ASSERT_EQ(on_left.has_value(), on_right.has_value());
+    if (on_left)
+    {
+        EXPECT_EQ(*on_left, Position::kWidth - 1 - *on_right);
+    }
+    // A position the book does not hold.
+    EXPECT_FALSE(book.Find(std::vector<int>{0, 0, 0, 0, 0}).has_value());
+    // A small book of its own: found by key, mirrored back.
+    const auto [key, is_mirrored] = OpeningBook::CanonicalKey(left);
+    const BookEntry   entries[]   = {{key, is_mirrored ? 4 : 2}};
+    const OpeningBook small{std::span<const BookEntry>(entries)};
+    EXPECT_EQ(small.Find(left), 2);
+    EXPECT_EQ(small.Find(right), 4);
+}
+
+TEST(OpeningBook, PlaysMovesTheSolverAgreesWith)
+{
+    // A game in which the computer starts and follows the book while the other side plays at random: at the book's
+    // deepest position met, its column keeps the position's exact score.
+    const OpeningBook &book = OpeningBook::Standard();
+    std::mt19937       random(17);
+    Search<Position>   search(3);
+    std::vector<int>   moves;
+    std::vector<int>   deepest;
+    int                deepest_column = -1;
+    for (int ply = 0; ply != 12; ++ply)
+    {
+        const Position position = Position::FromMoves(moves);
+        if (ply % 2 == 0)
+        {
+            const std::optional<int> column = book.Find(moves);
+            if (!column)
+            {
+                break;
+            }
+            deepest        = moves;
+            deepest_column = *column;
+            moves.push_back(*column);
+        }
+        else
+        {
+            std::vector<int> open;
+            for (int column = 0; column != Position::kWidth; ++column)
+            {
+                if (position.CanPlay(column) && !position.IsWinningMove(column))
+                {
+                    open.push_back(column);
+                }
+            }
+            if (open.empty())
+            {
+                break;
+            }
+            moves.push_back(open[std::uniform_int_distribution<std::size_t>(0, open.size() - 1)(random)]);
+        }
+    }
+    ASSERT_GE(deepest_column, 0);
+    if (deepest.size() < 6)
+    {
+        GTEST_SKIP() << "the book reaches only " << deepest.size() << " stones: too shallow to solve here quickly";
+    }
+    const Position           position = Position::FromMoves(deepest);
+    const std::optional<int> score    = search.Solve(position, 120.0);
+    ASSERT_TRUE(score.has_value());
+    Position child = position;
+    child.Play(deepest_column);
+    const std::optional<int> after = search.Solve(child, 120.0);
+    ASSERT_TRUE(after.has_value());
+    EXPECT_EQ(-*after, *score) << position.ToString();
+}
+
+TEST(Engine, OpensFromTheBookAtPerfect)
+{
+    Engine engine(kStandardBoard, 6);
+    EXPECT_EQ(engine.ChooseMove(std::vector<int>{}, Strength::kPerfect), 3);
+}
+
+} // namespace
+} // namespace knect4

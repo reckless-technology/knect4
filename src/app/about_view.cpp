@@ -52,8 +52,15 @@ AboutView::AboutView(std::string version, std::string licence, std::string notic
     {
         notices = EmbeddedText("third_party_notices.txt");
     }
-    text_ = std::make_unique<reckless::view::TextView>(TextStyle());
-    text_->SetText(licence + (notices.empty() ? std::string() : "\n\n" + notices));
+    text_            = std::make_unique<reckless::view::TextView>(TextStyle());
+    std::string text = licence + (notices.empty() || licence.empty() ? std::string() : "\n\n") + notices;
+    if (text.empty())
+    {
+        // A build that carries neither file: where the reader finds them.
+        text = "The licence (MIT) and the third-party notices are in LICENSE and THIRD-PARTY-NOTICES.txt, installed "
+               "beside the game and in its source.";
+    }
+    text_->SetText(text);
     AddChild(*text_);
     close_ = std::make_unique<reckless::view::Button>("Close", theme::PlatePainter(), [this] { Close(); });
     AddChild(*close_);

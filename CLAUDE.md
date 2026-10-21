@@ -9,22 +9,26 @@ outsiders can build the game core with `-DKNECT4_GUI=OFF` but not the window.
 
 ## Layout
 
-- `src/game/` (`knect4_game`): the board, its evaluation and the negamax search - the 2014 C# `Game.cs` in C++,
-  unchanged in behaviour. Equal-score moves are ordered as the .NET Framework 4.8's `List.Sort` ordered them
-  (`Game::SortBestFirst`), so the port plays the original's games move for move; `tests/data/csharp_self_play.txt`
-  holds it to them. Jonny, 2026-10-21: keep the board representation, search and evaluation as they are for now; they
-  will be worked on later - a change to them is a decision of his, and the fixture is then recorded again.
+- `src/game/` (`knect4_game`): `Game` (the board the window shows, and the rules), `BasicPosition` (bitboards in a
+  `std::uint64_t` or `WideBits` of two or three words, for the five board sizes in `kBoardSizes`), `Search` (Pons's
+  exact solver, depth-limited searches for Easy, Medium and Hard, wins scored by how soon, ties broken at random),
+  `Engine` (the sizes behind one interface), `OpeningBook` (Perfect's opening on 7 x 6, `opening_book_data.inc`,
+  written by `tools/make_book.cpp` - regenerate it, never edit it, after any change to the solver or the position's
+  key). Jonny, 2026-10-21: Easy looks only one or two plies ahead and is easy to beat; Perfect never loses a game it
+  could save on the standard board.
 - `src/effects/` (`knect4_effects`): `DropMotion` (the fall and its bounces), `RenderClick` and `ClickMixer` (the
   landing's click, made at the output's rate, mixed on the audio thread without locks). No toolkit.
 - `src/app/` (`knect4_gui`, `Knect4`, `knect4_render`): `Controller` (turns, against the computer or between two
   people - Red kMin, Yellow kMax - the search on a thread of its own through `std::async` with a stop flag, the
   computer's paced turn, the drop and its clicks, a score for each kind of game), `BoardView`
   (draws a `BoardPicture` scaled to fit; pucks behind the frame, held puck and banner in front), `board_art` (the
-  board's geometry in design pixels and its drawing), `SidePanel`, `MainView`, `menus`, `settings_file` (the person's
+  board's geometry for any size, and its drawing), `SidePanel`, `MainView`, `AboutView`, `WindowSizes` (Amphitheater's,
+  the size kept in the settings), `menus`, `settings_file` (the person's
   choices in `reckless-technology/knect4/settings.json`, each read defensively), `ClickPlayer` (the toolkit's audio
   layer, default output), `theme.h` (the Reckless dark look: cream ink, amber accent, Noto Serif).
-- `tests/`: `knect4_game_test` (game and effects), `tests/app/knect4_app_test` (controller, menus and settings file),
-  and the window's launch (`app_smoke`).
+- `tests/`: `knect4_game_test` (the board, the engine on every size - the solver held to exhaustive search - and the
+  effects), `tests/app/knect4_app_test` (controller, menus, settings file, views painted and driven, the click player
+  on the toolkit's offline audio API, window sizes), the render tool's runs and the window's launch (`app_smoke`).
 - `THIRD-PARTY-NOTICES.txt`: written by `tools/third_party_notices.py <build-dir>` from the build's fetches and the
   toolkit's pins (CTest `notices` checks it); the executable carries it and `LICENSE` as the embedded files
   `third_party_notices.txt` and `licence.txt`. Write it again when the submodule moves.

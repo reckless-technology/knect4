@@ -9,32 +9,56 @@ A C++20 program with its window drawn in Skia on reckless-toolkit, in the Reckle
 ## Playing
 
 - Move the pointer over a column and your puck hangs above it, with its landing slot marked; click to drop it. The keys
-  work too: 1 to 7 drop into a column, the left and right arrows move the puck, and Return, space or the down arrow
-  drop it.
+  work too: 1 to 9 drop into the first nine columns, the left and right arrows move the puck (an amber chevron on the
+  frame marks the column the keys hold it over), and Return, space or the down arrow drop it.
 - The puck falls behind the frame, showing through the holes as it passes, lands with a click and bounces once or twice.
-  The computer's puck sways above the board while it thinks, then glides to its column and drops.
-- The panel beside the board sets who you play against (the computer or a friend), the level (Easy, Medium, Hard),
-  your colour (red or yellow; the computer takes the other), who starts the next game, and the sound, and keeps the
-  score. "New game" starts again; when a game ends the winning line glows and "Play again" appears over the board. The
-  Game menu has all of these, with Ctrl+N for a new game, Ctrl+1 to Ctrl+3 for the levels, Ctrl+Shift+2 for a game
-  against a friend and Ctrl+M for the sound.
+  The computer's puck sways above the board while it thinks, then glides to its column and drops. A new game lets the
+  last one's pucks out: the slider in the frame's foot opens and they fall out column by column with a clatter.
+- The panel beside the board sets who you play against (the computer or a friend), the level (Easy, Medium, Hard,
+  Perfect), your colour (red or yellow; the computer takes the other), who starts the next game, the board's size
+  (6 x 5, 7 x 6, 8 x 7, 9 x 7 or the supersize 16 x 8), the sound and the pucks' marks, and keeps the score. "New game"
+  starts again, "Undo" takes back your last move and the computer's answer, and "Hint" shows, after a moment's search,
+  the column the engine would play. When a game ends the winning line glows and "Play again" appears over the board.
+- The Game menu has the same choices (Ctrl+N a new game, Ctrl+Z undo, Ctrl+H a hint, Ctrl+1 to Ctrl+4 the levels,
+  Ctrl+Shift+2 a game against a friend, Ctrl+M the sound); the Board menu the sizes; the View menu the marks and the
+  window's size (50 % to 150 %, Ctrl+= and Ctrl+- a size up or down); Help, the About card with the licence and the
+  third-party notices.
 - Against a friend, two people share the board and the mouse: Red and Yellow take turns, the held puck in the colour of
-  whoever is to move, and the panel names them - "Red to move", "Yellow wins!". "First move" chooses Red or Yellow;
-  the level and the colour choice are the computer game's and rest dimmed. Changing the opponent starts a new game, and
-  games between two people keep a Red / Yellow / Drawn score of their own.
-- The opponent, level, colour, who starts and the sound are kept between launches, in
-  `reckless-technology/knect4/settings.json` in the user's settings folder (`%APPDATA%` on Windows,
-  `~/Library/Application Support` on macOS, `~/.config` on Linux). The scores are the session's own.
+  whoever is to move, and the panel names them - by the names typed into its Players section, or by colour. "First
+  move" chooses Red or Yellow, and "Take turns" passes the first move to the other each new game. Changing the opponent
+  starts a new game, and games between two people keep a score of their own.
+- Marked pucks carry a cross (red) or a star (yellow) on their faces, for anyone who cannot tell the colours apart.
+- Everything chosen, and both scores, are kept between launches in `reckless-technology/knect4/settings.json` in the
+  user's settings folder (`%APPDATA%` on Windows, `~/Library/Application Support` on macOS, `~/.config` on Linux).
 
 ## The game
 
-`src/game` is the game of 2014's C# version (`Game.cs`, in this repository's history) in C++, unchanged in what it
-does: the board (7 columns by 6 rows, the computer the MAX side), each move scored by the lines it stands in (1, 13, 37
-and 104729 for lines of one to four), and a negamax search with alpha-beta pruning to a fixed depth - 3, 7 or 11 plies
-for Easy, Medium and Hard - its moves tried best first. Its moves of equal score are ordered as the .NET Framework's
-`List.Sort` left them, so it chooses among equal moves as the original did. `tests/data/csharp_self_play.txt` is 49
-games the original played against itself at depths 1 to 7, recorded from the C# build; the suite replays every one and
-requires the same move and the same score at every turn. Hard thinks for at most about a fifth of a second a move.
+`src/game` holds the rules and the computer's play, and needs nothing else.
+
+- `Game` is the board the window shows: the pieces in each slot, the moves, four in a row, a draw and the winning line.
+- `BasicPosition` holds a position for the search as two bitboards, a column `rows + 1` bits, in a 64-bit word where
+  the board fits (6 x 5, 7 x 6, 8 x 7) or several (`WideBits`: two for 9 x 7, three for 16 x 8). A move is an addition;
+  the slots that would make four are found by shifts (`ComputeWinningPositions`).
+- `Search` plays on a position: an exact solver after Pascal Pons's design - only moves that do not lose at once, a
+  table of upper bounds, moves tried by the threats they make with the centre first, and narrowing null windows - and
+  a depth-limited search judged by threats, the rows that favour each side and the centre. Every win scores by how soon
+  it comes, so the computer takes a quick win and puts off a loss. Equal moves are chosen between at random, so games
+  vary.
+  - Easy looks two plies ahead with no judgement, and one move in three looks no further than its own: it takes a four it
+    is offered, often stops one, and is otherwise aimless - easy to beat.
+  - Medium searches up to six plies on the judgement, content now and then with a move a threat's worth below the best.
+  - Hard deepens to twelve plies in two seconds.
+  - Perfect solves the position exactly in four seconds where it can - on the standard board from about the eighth
+    stone - and otherwise plays the deepest judgement the time allows. On the standard board it opens from a book
+    (`src/game/opening_book_data.inc`) that `tools/make_book.cpp` works out with the solver: the best column in every
+    position the computer can meet in its first moves while it plays the book's, mirror images folded together, the
+    empty board's centre written in from the game's published solution (Allis 1988, Allen 1988). With the book it never
+    loses a game it could have saved. The larger boards are too large to solve, so Perfect plays them by search.
+- `Engine` puts the five sizes' searches behind one interface the window uses; the hint is Perfect's choice for the side
+  to move.
+
+The suites hold the position to the board on hundreds of random games on every size, the solver to an exhaustive search
+on late positions of two sizes, and each level to beating the one below it.
 
 ## The feel
 

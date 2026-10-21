@@ -48,6 +48,12 @@ class OpeningBook
         return entries_.size();
     }
 
+    /** @return The entries, sorted by key. */
+    std::span<const BookEntry> entries() const noexcept
+    {
+        return entries_;
+    }
+
     /**
      * @param moves Moves on the standard board.
      * @return The key the book files the position after them under, and whether that is its mirror image's.
