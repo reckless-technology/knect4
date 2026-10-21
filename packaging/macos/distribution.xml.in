@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The product package's distribution (packaging/macos/make_installer.sh fills in the version): the licence, macOS 13.3
+     and later on either kind of Mac, and the three parts every install takes. -->
+<installer-gui-script minSpecVersion="2">
+    <title>Knect 4 @VERSION@</title>
+    <license file="LICENSE.txt"/>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="13.3"/>
+        </allowed-os-versions>
+    </volume-check>
+    <choices-outline>
+        <line choice="app"/>
+        <line choice="docs"/>
+        <line choice="uninstaller"/>
+    </choices-outline>
+    <choice id="app" title="Knect 4" visible="false">
+        <pkg-ref id="com.recklesstechnology.knect4.app"/>
+    </choice>
+    <choice id="docs" title="Knect 4's licence and notices" visible="false">
+        <pkg-ref id="com.recklesstechnology.knect4.docs"/>
+    </choice>
+    <choice id="uninstaller" title="Uninstall Knect 4" visible="false">
+        <pkg-ref id="com.recklesstechnology.knect4.uninstaller"/>
+    </choice>
+    <pkg-ref id="com.recklesstechnology.knect4.app" version="@VERSION@" onConclusion="none">app.pkg</pkg-ref>
+    <pkg-ref id="com.recklesstechnology.knect4.docs" version="@VERSION@" onConclusion="none">docs.pkg</pkg-ref>
+    <pkg-ref id="com.recklesstechnology.knect4.uninstaller" version="@VERSION@" onConclusion="none">uninstaller.pkg</pkg-ref>
+</installer-gui-script>

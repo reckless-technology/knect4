@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Knect 4
+GenericName=Four in a row
+Comment=Drop pucks into the board and make four in a row, against the computer or a friend
+Exec=/opt/reckless-technology/bin/knect4
+Icon=com.recklesstechnology.knect4
+Terminal=false
+Categories=Game;BoardGame;
+Keywords=four in a row;connect;board game;puzzle;
+StartupWMClass=Knect 4
