@@ -1,13 +1,13 @@
 {
-    // Windows only: "clr" is the C# extension's debugger for the .NET Framework, which runs on Windows alone.
+    // Windows: the Debug build under Visual Studio's debugger (the C/C++ extension's cppvsdbg).
     "version": "0.2.0",
     "configurations": [
         {
             "name": "Connect Four",
-            "type": "clr",
+            "type": "cppvsdbg",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/net48/ConnectFour.exe",
+            "program": "${workspaceFolder}/build/debug/src/app/Connect4.exe",
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false
         }

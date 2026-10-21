@@ -1,13 +1,19 @@
 name: build
 
-# Connect Four built on Windows and its executable kept as the run's artifact. The repository is private, so the job runs
-# on the organisation's self-hosted Windows runners. The game is one executable for the .NET Framework 4.8 every Windows
-# 10 and 11 carries; the .NET SDK builds it from the reference assemblies the project fetches as a package.
+# Connect Four built on Windows with MSVC, its suites run (the window's launch among them), and Connect4.exe kept as the
+# run's artifact; and the C++ held to clang-format 22.1.8. The repository is private, so the jobs run on the
+# organisation's self-hosted runners. The window is built on the toolkit, a private submodule read through its
+# read-only deploy key (.github/actions/toolkit).
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      fresh:
+        description: Build from nothing, the kept build tree removed
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -18,24 +24,79 @@ concurrency:
 
 jobs:
   windows:
-    name: Windows
+    name: Windows (MSVC)
     runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
     steps:
       - uses: actions/checkout@v5
-      # %PROGRAMFILES%\dotnet is not writable by the runner's service account: the SDK goes to the tool cache.
-      - uses: actions/setup-dotnet@v5
-        env:
-          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
         with:
-          dotnet-version: 10.0.x
+          clean: false
+      - name: The toolkit submodule
+        uses: ./.github/actions/toolkit
+        with:
+          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
+          require-on-main: "true"
+      - name: Tidy the workspace
+        run: |
+          if ('${{ github.event.inputs.fresh }}' -eq 'true') { 'fresh: removing the kept tree'; Remove-Item -Recurse -Force build/ci -ErrorAction SilentlyContinue }
+          if (Test-Path build/ci/CMakeCache.txt) { 'build/ci kept from the last run' } else { 'build/ci: building from nothing' }
+      # The MSVC developer environment of the Visual Studio vswhere finds, for the later steps; FetchContent's downloads
+      # kept in the runner's tool cache between runs, by compiler.
+      - name: Toolchain
+        id: cpp
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "No Visual Studio with the x64 C++ tools found" }
+          $before = @{}
+          Get-ChildItem env: | ForEach-Object { $before[$_.Name] = $_.Value }
+          $devcmd = Join-Path $vs 'Common7\Tools\VsDevCmd.bat'
+          cmd.exe /c "`"$devcmd`" -arch=x64 -host_arch=x64 -no_logo && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$' -and $before[$Matches[1]] -ne $Matches[2]) {
+              "$($Matches[1])=$($Matches[2])" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+            }
+          }
+          $deps = Join-Path $env:RUNNER_TOOL_CACHE "connect4-deps\msvc"
+          New-Item -ItemType Directory -Force -Path $deps | Out-Null
+          "Visual Studio: $vs; dependencies: $deps"
+          "deps=$deps" >> $env:GITHUB_OUTPUT
+      - name: Configure
+        run: >
+          cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release -DFETCHCONTENT_UPDATES_DISCONNECTED=ON
+          "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}"
       - name: Build
-        run: dotnet build ConnectFour.sln -c Release -nologo --disable-build-servers -nodeReuse:false
+        run: cmake --build build/ci -j $env:NUMBER_OF_PROCESSORS
+      # Every suite: the game's (its search held to the original's own games), the window's, and the window's launch,
+      # which the runner's service draws on a window station that shows nothing.
+      - name: Test
+        run: ctest --test-dir build/ci --output-on-failure -j $env:NUMBER_OF_PROCESSORS
       - name: Upload the executable
         uses: actions/upload-artifact@v6
         with:
           name: connect4-windows
-          path: |
-            bin/Release/net48/ConnectFour.exe
-            bin/Release/net48/ConnectFour.exe.config
+          path: build/ci/src/app/Connect4.exe
           if-no-files-found: error
           retention-days: 30
+
+  format:
+    name: clang-format
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          clean: false
+      - name: clang-format 22.1.8
+        run: |
+          venv="$RUNNER_TOOL_CACHE/clang-format-22.1.8"
+          if [ ! -x "$venv/bin/clang-format" ]; then
+            python3 -m venv "$venv"
+            "$venv/bin/pip" install --quiet 'clang-format==22.1.8'
+          fi
+          "$venv/bin/clang-format" --version
+          files=$(git ls-files -- 'src/*.h' 'src/*.cpp' 'tests/*.h' 'tests/*.cpp')
+          echo "$(echo "$files" | grep -c .) files"
+          "$venv/bin/clang-format" --dry-run -Werror $files

@@ -1,27 +1,42 @@
 {
-    // Windows only: the game is a Windows Forms executable for the .NET Framework 4.8.
+    // Windows: the build runs in Visual Studio's developer environment (VsDevCmd.bat, found by vswhere), which puts
+    // cmake, ninja and cl on the PATH.
     "version": "2.0.0",
     "tasks": [
         {
             "label": "build",
-            "type": "process",
+            "type": "shell",
             "windows": {
-                "command": "dotnet",
-                "args": ["build", "${workspaceFolder}/ConnectFour.sln", "-c", "Debug", "-nologo",
-                         "-property:GenerateFullPaths=true", "-consoleLoggerParameters:NoSummary"]
+                "command": "cmd.exe",
+                "args": ["/d", "/c",
+                         "for /f \"usebackq delims=\" %i in (`\"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe\" -latest -products * -property installationPath`) do call \"%i\\Common7\\Tools\\VsDevCmd.bat\" -arch=x64 -host_arch=x64 -no_logo && cmake --preset debug && cmake --build --preset debug"]
             },
+            "options": {"cwd": "${workspaceFolder}"},
             "group": {"kind": "build", "isDefault": true},
             "problemMatcher": "$msCompile"
         },
         {
             "label": "build release",
-            "type": "process",
+            "type": "shell",
             "windows": {
-                "command": "dotnet",
-                "args": ["build", "${workspaceFolder}/ConnectFour.sln", "-c", "Release", "-nologo",
-                         "-property:GenerateFullPaths=true", "-consoleLoggerParameters:NoSummary"]
+                "command": "cmd.exe",
+                "args": ["/d", "/c",
+                         "for /f \"usebackq delims=\" %i in (`\"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe\" -latest -products * -property installationPath`) do call \"%i\\Common7\\Tools\\VsDevCmd.bat\" -arch=x64 -host_arch=x64 -no_logo && cmake --preset release && cmake --build --preset release"]
             },
+            "options": {"cwd": "${workspaceFolder}"},
             "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "test",
+            "type": "shell",
+            "windows": {
+                "command": "cmd.exe",
+                "args": ["/d", "/c",
+                         "for /f \"usebackq delims=\" %i in (`\"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe\" -latest -products * -property installationPath`) do call \"%i\\Common7\\Tools\\VsDevCmd.bat\" -arch=x64 -host_arch=x64 -no_logo && cmake --build --preset debug && ctest --preset debug"]
+            },
+            "options": {"cwd": "${workspaceFolder}"},
+            "group": {"kind": "test", "isDefault": true},
             "problemMatcher": "$msCompile"
         }
     ]

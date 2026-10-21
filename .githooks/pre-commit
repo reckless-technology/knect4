@@ -1,5 +1,6 @@
 #!/bin/sh
-# Refuse a commit made under any identity but Jonny Reckless <jonny@recklesstechnology.com>.
+# Refuse a commit made under any identity but Jonny Reckless <jonny@recklesstechnology.com>, or staged C++ that is not
+# clang-format clean (below).
 #
 # Every commit in the reckless-technology organisation's repositories is authored and committed as
 # jonny@recklesstechnology.com. The check reads the identity git will stamp - user.email, or an --author,
@@ -20,4 +21,28 @@ for role in AUTHOR COMMITTER; do
         exit 1
     fi
 done
+
+# Staged C++ must be clean under the repository's .clang-format (pawnstar's) with clang-format 22.1.8, the one version
+# every Reckless repository formats with: another major restyles code 22 leaves alone. The staged content is checked,
+# not the working file, so a file formatted after `git add` needs adding again.
+staged=$(git diff --cached --name-only --diff-filter=ACMR -- '*.h' '*.cpp' '*.mm' | grep -v '^external/' || true)
+if [ -n "$staged" ]; then
+    formatter=$(command -v clang-format || true)
+    if [ -z "$formatter" ] || ! "$formatter" --version | grep -q 'version 22\.1\.8'; then
+        echo "pre-commit: staged C++ needs clang-format 22.1.8 on the PATH (found: ${formatter:-none})." >&2
+        echo "pre-commit:   uv tool install clang-format==22.1.8" >&2
+        exit 1
+    fi
+    bad=""
+    for file in $staged; do
+        if ! git show ":$file" | "$formatter" --dry-run -Werror --assume-filename="$file" > /dev/null 2>&1; then
+            bad="$bad $file"
+        fi
+    done
+    if [ -n "$bad" ]; then
+        echo "pre-commit: not clang-format clean:$bad" >&2
+        echo "pre-commit:   clang-format -i$bad && git add$bad" >&2
+        exit 1
+    fi
+fi
 exit 0

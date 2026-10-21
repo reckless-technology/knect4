@@ -1,0 +1,42 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {"major": 3, "minor": 25, "patch": 0},
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "generator": "Ninja",
+            "cacheVariables": {"CONNECT4_BUILD_TESTS": "ON"}
+        },
+        {
+            "name": "debug",
+            "displayName": "Debug: the game and its suites, unoptimised, with the debugger's information",
+            "inherits": "base",
+            "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug"}
+        },
+        {
+            "name": "release",
+            "displayName": "Release: the game as it ships, and its suites",
+            "inherits": "base",
+            "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}
+        },
+        {
+            "name": "release-universal",
+            "displayName": "Release, macOS: one binary for Apple silicon and Intel",
+            "inherits": "release",
+            "condition": {"type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin"},
+            "cacheVariables": {"CMAKE_OSX_ARCHITECTURES": "arm64;x86_64"}
+        }
+    ],
+    "buildPresets": [
+        {"name": "debug", "configurePreset": "debug"},
+        {"name": "release", "configurePreset": "release"},
+        {"name": "release-universal", "configurePreset": "release-universal"}
+    ],
+    "testPresets": [
+        {"name": "debug", "configurePreset": "debug", "output": {"outputOnFailure": true}},
+        {"name": "release", "configurePreset": "release", "output": {"outputOnFailure": true}},
+        {"name": "release-universal", "configurePreset": "release-universal", "output": {"outputOnFailure": true}}
+    ]
+}
