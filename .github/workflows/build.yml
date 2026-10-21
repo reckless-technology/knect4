@@ -1,0 +1,41 @@
+name: build
+
+# Connect Four built on Windows and its executable kept as the run's artifact. The repository is private, so the job runs
+# on the organisation's self-hosted Windows runners. The game is one executable for the .NET Framework 4.8 every Windows
+# 10 and 11 carries; the .NET SDK builds it from the reference assemblies the project fetches as a package.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows
+    runs-on: [self-hosted, Windows, X64]
+    steps:
+      - uses: actions/checkout@v5
+      # %PROGRAMFILES%\dotnet is not writable by the runner's service account: the SDK goes to the tool cache.
+      - uses: actions/setup-dotnet@v5
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
+        with:
+          dotnet-version: 10.0.x
+      - name: Build
+        run: dotnet build ConnectFour.sln -c Release -nologo --disable-build-servers -nodeReuse:false
+      - name: Upload the executable
+        uses: actions/upload-artifact@v6
+        with:
+          name: connect4-windows
+          path: |
+            bin/Release/net48/ConnectFour.exe
+            bin/Release/net48/ConnectFour.exe.config
+          if-no-files-found: error
+          retention-days: 30

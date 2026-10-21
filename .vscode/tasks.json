@@ -1,0 +1,28 @@
+{
+    // Windows only: the game is a Windows Forms executable for the .NET Framework 4.8.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "process",
+            "windows": {
+                "command": "dotnet",
+                "args": ["build", "${workspaceFolder}/ConnectFour.sln", "-c", "Debug", "-nologo",
+                         "-property:GenerateFullPaths=true", "-consoleLoggerParameters:NoSummary"]
+            },
+            "group": {"kind": "build", "isDefault": true},
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build release",
+            "type": "process",
+            "windows": {
+                "command": "dotnet",
+                "args": ["build", "${workspaceFolder}/ConnectFour.sln", "-c", "Release", "-nologo",
+                         "-property:GenerateFullPaths=true", "-consoleLoggerParameters:NoSummary"]
+            },
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}
