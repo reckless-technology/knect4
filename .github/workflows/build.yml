@@ -82,12 +82,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Line coverage of the game's own code (src/ but the app's entry point), measured as tools/coverage-windows.ps1
-  # measures it on a desk: clang-cl and LLVM's source-based coverage over every suite, the window's launch and the
-  # render tool's runs, red under 95 %. Its tree is build/coverage-windows, kept between runs; the profiles are not.
+  # Line coverage of the game's own code (src/ but the app's entry point), gcc's, read by gcovr 8.3: a debug build
+  # instrumented, every suite and the render tool's runs on Linux, red under 95 % of lines. The window's launch is left
+  # to the Windows job (it needs a display); on a desk, tools/coverage-windows.ps1 measures the same with clang-cl.
+  # This is also the game's own Linux build. Kept tree build/ci-coverage; its counters cleared before every run.
   coverage:
-    name: Coverage (clang-cl)
-    runs-on: [self-hosted, Windows, X64]
+    name: Coverage (Linux, gcc)
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
@@ -97,15 +98,58 @@ jobs:
         uses: ./.github/actions/toolkit
         with:
           deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
-      - name: Coverage, at least 95 %
-        shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File tools/coverage-windows.ps1 -Threshold 95
+      # What the build needs - the compiler, CMake, Ninja, and what Skia, the child window and ALSA link - looked up by
+      # name, installed with the runner's passwordless sudo where missing; gcovr in a venv of the tool cache.
+      - name: Toolchain
+        id: cpp
+        run: |
+          set -euo pipefail
+          apt_line="build-essential cmake ninja-build pkg-config python3-venv libfreetype-dev libfontconfig1-dev libx11-dev libasound2-dev"
+          find_missing() {
+            missing=""
+            for tool in g++ cmake ninja pkg-config python3; do command -v "$tool" > /dev/null || missing="$missing $tool"; done
+            for package in freetype2 fontconfig x11 alsa; do pkg-config --exists "$package" 2> /dev/null || missing="$missing $package.pc"; done
+          }
+          find_missing
+          if [ -n "$missing" ] && sudo -n true 2> /dev/null; then
+            echo "the runner lacks:$missing - installing"
+            sudo -n apt-get update -qq
+            sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $apt_line
+            find_missing
+          fi
+          if [ -n "$missing" ]; then echo "::error::the runner lacks:$missing. sudo apt install $apt_line"; exit 1; fi
+          gcovr="$RUNNER_TOOL_CACHE/gcovr-8.3"
+          if [ ! -x "$gcovr/bin/gcovr" ]; then python3 -m venv "$gcovr" && "$gcovr/bin/pip" install --quiet gcovr==8.3; fi
+          deps="$RUNNER_TOOL_CACHE/knect4-deps/gcc$(g++ -dumpversion | cut -d. -f1)"
+          mkdir -p "$deps"
+          g++ --version | head -1
+          { echo "gcovr=$gcovr/bin/gcovr"; echo "deps=$deps"; echo "jobs=$(nproc)"; } >> "$GITHUB_OUTPUT"
+      - name: Configure
+        run: >
+          cmake -S . -B build/ci-coverage -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKNECT4_COVERAGE=ON
+          -DFETCHCONTENT_UPDATES_DISCONNECTED=ON "-DFETCHCONTENT_BASE_DIR=${{ steps.cpp.outputs.deps }}"
+      - name: Build
+        run: cmake --build build/ci-coverage -j ${{ steps.cpp.outputs.jobs }}
+      - name: Test
+        run: |
+          find build/ci-coverage -name '*.gcda' -delete
+          ctest --test-dir build/ci-coverage --output-on-failure -j ${{ steps.cpp.outputs.jobs }} -LE '^window$'
+      - name: Coverage, 95 % of lines or red
+        run: >
+          mkdir -p build/ci-coverage/coverage &&
+          "${{ steps.cpp.outputs.gcovr }}" --root . --filter 'src/' --exclude 'src/app/main[.]cpp' build/ci-coverage
+          --gcov-ignore-parse-errors=negative_hits.warn_once_per_file
+          --print-summary --txt build/ci-coverage/coverage.txt --html-details build/ci-coverage/coverage/index.html
+          --fail-under-line 95
+      - name: The report
+        if: always()
+        run: cat build/ci-coverage/coverage.txt || true
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: knect4-coverage
-          path: build/coverage-windows/coverage/
+          path: build/ci-coverage/coverage
           if-no-files-found: ignore
           retention-days: 30
 

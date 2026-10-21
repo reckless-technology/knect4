@@ -37,6 +37,7 @@ proprietary, Jonny Reckless's.
   when CI is green.
 - CI runs on the organisation's self-hosted runners only (the repository is private).
 - The game is a consumer of the toolkit: a bump of the submodule points at a commit on the toolkit's `main` (CI checks).
-- Line coverage of `src/` stays at 95 % or more (`tools/coverage-windows.ps1`, CI's coverage job): every new behaviour
-  gets a test; the views are driven by events and painted into images in `tests/app/views_test.cpp`, the audio output
-  through the toolkit's offline API in `tests/app/click_player_test.cpp`.
+- Line coverage of `src/` stays at 95 % or more (CI's coverage job, gcc and gcovr on Linux; `tools/coverage-windows.ps1`
+  on a Windows desk with clang-cl, which the Windows runners lack): every new behaviour gets a test; the views are
+  driven by events and painted into images in `tests/app/views_test.cpp`, the audio output through the toolkit's
+  offline API in `tests/app/click_player_test.cpp`.

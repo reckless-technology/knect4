@@ -79,11 +79,11 @@ Debug configuration, its test task runs the suites, and the "Knect 4" launch ent
 
 `.github/workflows/build.yml`, on the organisation's self-hosted runners (the repository is private): Windows with MSVC
 builds everything, runs every suite including the window's launch, and keeps `Knect4.exe` as the run's artifact
-`knect4-windows` for 30 days; a second Windows job measures the line coverage (`tools/coverage-windows.ps1`) and fails
-under 95 %, its report kept as `knect4-coverage`; a Linux job checks the formatting. A newer push to a pull request
-cancels its older run; every commit on `main` keeps its own. The toolkit submodule is read through its read-only
-deploy key, the secret `RECKLESS_TOOLKIT_DEPLOY_KEY`. The toolkit's own CI builds the game's library on Linux at
-every toolkit change (its consumers job), which is the only Linux build; macOS is not built yet.
+`knect4-windows` for 30 days; a Linux job builds it with gcc instrumented for coverage, runs every suite and the
+render tool's pictures, and fails under 95 % of lines (gcovr 8.3; the report kept as `knect4-coverage`) - the game's
+Linux build; another checks the formatting. A newer push to a pull request cancels its older run; every commit on
+`main` keeps its own. The toolkit submodule is read through its read-only deploy key, the secret
+`RECKLESS_TOOLKIT_DEPLOY_KEY`. macOS is not built yet.
 
 ## History
 
