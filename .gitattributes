@@ -1,0 +1,2 @@
+# The identity hooks are shell scripts, which a CR breaks: keep them LF wherever the clone is.
+.githooks/* text eol=lf
