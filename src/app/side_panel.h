@@ -22,13 +22,19 @@ class ScoreView final : public reckless::view::View
   public:
     ScoreView();
 
-    /** @param score The games so far; repaints when they differ. */
-    void SetScore(const Score &score);
+    /**
+     * The counts shown; repaints when they differ.
+     * @param score The games so far.
+     * @param is_two_player Whether they are games between two people, counted for Red and Yellow, rather than for the
+     *        person and the computer.
+     */
+    void SetScore(const Score &score, bool is_two_player);
 
     void Paint(reckless::gfx::Canvas &c) override;
 
   private:
-    Score score_; ///< The counts shown.
+    Score score_;                ///< The counts shown.
+    bool  is_two_player_{false}; ///< They are Red's and Yellow's.
 };
 
 /**
@@ -43,6 +49,7 @@ class SidePanel final : public reckless::view::View
 
     SidePanel();
 
+    std::function<void(bool is_two_player)>     on_opponent; ///< The computer or a friend chosen to play against.
     std::function<void(Level level)>            on_level;    ///< A level chosen.
     std::function<void(bool is_person_red)>     on_colour;   ///< A colour chosen.
     std::function<void(bool does_person_start)> on_starter;  ///< Who starts, chosen.
@@ -81,19 +88,21 @@ class SidePanel final : public reckless::view::View
      */
     std::unique_ptr<reckless::view::Button> AddChoice(std::string text, std::function<void()> clicked);
 
-    std::unique_ptr<reckless::app::TextLine>               title_;           ///< The game's name.
-    std::unique_ptr<reckless::app::TextLine>               headline_;        ///< Where the game stands.
-    std::unique_ptr<reckless::app::TextLine>               detail_;          ///< Who plays which colour, at what level.
-    std::unique_ptr<reckless::app::Section>                level_section_;   ///< "Level".
-    std::unique_ptr<reckless::app::Section>                colour_section_;  ///< "Your pucks".
-    std::unique_ptr<reckless::app::Section>                starter_section_; ///< "First move".
-    std::unique_ptr<reckless::app::Section>                score_section_;   ///< "Score".
-    std::array<std::unique_ptr<reckless::view::Button>, 3> levels_;          ///< Easy, Medium, Hard.
-    std::array<std::unique_ptr<reckless::view::Button>, 2> colours_;         ///< Red, Yellow.
-    std::array<std::unique_ptr<reckless::view::Button>, 2> starters_;        ///< You, Computer.
-    std::unique_ptr<reckless::view::Button>                new_game_;        ///< "New game".
-    std::unique_ptr<reckless::view::Button>                sound_;           ///< "Sound", a toggle.
-    std::unique_ptr<ScoreView>                             score_;           ///< The counts.
+    std::unique_ptr<reckless::app::TextLine>               title_;    ///< The game's name.
+    std::unique_ptr<reckless::app::TextLine>               headline_; ///< Where the game stands.
+    std::unique_ptr<reckless::app::TextLine>               detail_;   ///< Who plays which colour, at what level.
+    std::unique_ptr<reckless::app::Section>                opponent_section_; ///< "Play against".
+    std::unique_ptr<reckless::app::Section>                level_section_;    ///< "Level".
+    std::unique_ptr<reckless::app::Section>                colour_section_;   ///< "Your pucks".
+    std::unique_ptr<reckless::app::Section>                starter_section_;  ///< "First move".
+    std::unique_ptr<reckless::app::Section>                score_section_;    ///< "Score".
+    std::array<std::unique_ptr<reckless::view::Button>, 2> opponents_;        ///< Computer, A friend.
+    std::array<std::unique_ptr<reckless::view::Button>, 3> levels_;           ///< Easy, Medium, Hard.
+    std::array<std::unique_ptr<reckless::view::Button>, 2> colours_;          ///< Red, Yellow.
+    std::array<std::unique_ptr<reckless::view::Button>, 2> starters_;         ///< You and Computer, or Red and Yellow.
+    std::unique_ptr<reckless::view::Button>                new_game_;         ///< "New game".
+    std::unique_ptr<reckless::view::Button>                sound_;            ///< "Sound", a toggle.
+    std::unique_ptr<ScoreView>                             score_;            ///< The counts.
 };
 
 } // namespace knect4::app

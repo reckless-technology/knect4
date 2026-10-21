@@ -20,7 +20,7 @@ class MainView final : public reckless::view::View
     static constexpr int kDesignWidth   = 1100; ///< The size the window opens at, in design pixels.
     static constexpr int kDesignHeight  = 760;  ///< Its height.
     static constexpr int kLayoutWidth   = 860;  ///< The least the layout takes; smaller is zoomed down.
-    static constexpr int kLayoutHeight  = 640;  ///< Its height.
+    static constexpr int kLayoutHeight  = 700;  ///< Its height.
     static constexpr int kMinimumWidth  = 640;  ///< The least the window may be resized to.
     static constexpr int kMinimumHeight = 480;  ///< Its height.
 

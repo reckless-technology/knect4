@@ -15,8 +15,9 @@ proprietary, Jonny Reckless's.
   will be worked on later - a change to them is a decision of his, and the fixture is then recorded again.
 - `src/effects/` (`knect4_effects`): `DropMotion` (the fall and its bounces), `RenderClick` and `ClickMixer` (the
   landing's click, made at the output's rate, mixed on the audio thread without locks). No toolkit.
-- `src/app/` (`knect4_gui`, `Knect4`, `knect4_render`): `Controller` (turns, the search on a thread of its own
-  through `std::async` with a stop flag, the computer's paced turn, the drop and its clicks, the score), `BoardView`
+- `src/app/` (`knect4_gui`, `Knect4`, `knect4_render`): `Controller` (turns, against the computer or between two
+  people - Red kMin, Yellow kMax - the search on a thread of its own through `std::async` with a stop flag, the
+  computer's paced turn, the drop and its clicks, a score for each kind of game), `BoardView`
   (draws a `BoardPicture` scaled to fit; pucks behind the frame, held puck and banner in front), `board_art` (the
   board's geometry in design pixels and its drawing), `SidePanel`, `MainView`, `menus`, `settings_file` (the person's
   choices in `reckless-technology/knect4/settings.json`, each read defensively), `ClickPlayer` (the toolkit's audio

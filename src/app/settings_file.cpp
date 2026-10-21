@@ -50,6 +50,7 @@ Settings ReadSettings(const std::filesystem::path &file)
     {
         return settings;
     }
+    settings.is_two_player  = document->StringOr("opponent", "computer") == "friend";
     const std::string level = document->StringOr("level", LevelName(settings.level));
     for (const Level known : {Level::kEasy, Level::kMedium, Level::kHard})
     {
@@ -71,6 +72,7 @@ bool WriteSettings(const std::filesystem::path &file, const Settings &settings)
         return false;
     }
     reckless::core::json::Value document;
+    document.Set("opponent", std::string(settings.is_two_player ? "friend" : "computer"));
     document.Set("level", std::string(LevelName(settings.level)));
     document.Set("your_colour", std::string(settings.is_person_red ? "red" : "yellow"));
     document.Set("first_move", std::string(settings.does_person_start ? "you" : "computer"));

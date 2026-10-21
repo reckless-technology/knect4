@@ -1,6 +1,6 @@
 #pragma once
 /// @file settings_file.h The person's choices kept between launches: `reckless-technology/knect4/settings.json` in
-/// the user's settings folder, a JSON object of the level, the colour, who starts and the sound.
+/// the user's settings folder, a JSON object of the opponent, the level, the colour, who starts and the sound.
 
 #include "controller.h"
 

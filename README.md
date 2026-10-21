@@ -1,6 +1,7 @@
 # knect4
 
-Knect 4 against the computer: drop pucks into a blue upright board, four in a row across, up or diagonally wins.
+Knect 4, against the computer or between two people at one board: drop pucks into a blue upright board, four in a row
+across, up or diagonally wins.
 A C++20 program with its window drawn in Skia on reckless-toolkit, in the Reckless apps' look.
 
 ![The game under way](docs/images/game.png)
@@ -12,13 +13,18 @@ A C++20 program with its window drawn in Skia on reckless-toolkit, in the Reckle
   drop it.
 - The puck falls behind the frame, showing through the holes as it passes, lands with a click and bounces once or twice.
   The computer's puck sways above the board while it thinks, then glides to its column and drops.
-- The panel beside the board sets the level (Easy, Medium, Hard), your colour (red or yellow; the computer takes the
-  other), who starts the next game, and the sound, and keeps the score. "New game" starts again; when a game ends the
-  winning line glows and "Play again" appears over the board. The Game menu has all of these, with Ctrl+N for a new
-  game, Ctrl+1 to Ctrl+3 for the levels and Ctrl+M for the sound.
-- The level, colour, who starts and the sound are kept between launches, in `reckless-technology/knect4/settings.json`
-  in the user's settings folder (`%APPDATA%` on Windows, `~/Library/Application Support` on macOS, `~/.config` on
-  Linux). The score is the session's own.
+- The panel beside the board sets who you play against (the computer or a friend), the level (Easy, Medium, Hard),
+  your colour (red or yellow; the computer takes the other), who starts the next game, and the sound, and keeps the
+  score. "New game" starts again; when a game ends the winning line glows and "Play again" appears over the board. The
+  Game menu has all of these, with Ctrl+N for a new game, Ctrl+1 to Ctrl+3 for the levels, Ctrl+Shift+2 for a game
+  against a friend and Ctrl+M for the sound.
+- Against a friend, two people share the board and the mouse: Red and Yellow take turns, the held puck in the colour of
+  whoever is to move, and the panel names them - "Red to move", "Yellow wins!". "First move" chooses Red or Yellow;
+  the level and the colour choice are the computer game's and rest dimmed. Changing the opponent starts a new game, and
+  games between two people keep a Red / Yellow / Drawn score of their own.
+- The opponent, level, colour, who starts and the sound are kept between launches, in
+  `reckless-technology/knect4/settings.json` in the user's settings folder (`%APPDATA%` on Windows,
+  `~/Library/Application Support` on macOS, `~/.config` on Linux). The scores are the session's own.
 
 ## The game
 
@@ -58,8 +64,8 @@ build/release/src/app/Knect4.exe
 `-DKNECT4_GUI=OFF` builds the game and its suites alone, with no submodule. VS Code's default build task builds the
 Debug configuration, its test task runs the suites, and the "Knect 4" launch entry starts it under the debugger.
 
-- `build/release/src/app/knect4_render <out.png> [mid|drop|won|lost]` draws the window in that state to a PNG;
-  `docs/images/` holds its pictures.
+- `build/release/src/app/knect4_render <out.png> [mid|drop|won|lost|friend|friend-won]` draws the window in that state
+  to a PNG; `docs/images/` holds its pictures.
 - `python tools/make_icon.py build/release/src/app/knect4_render.exe` draws the icon at every size into
   `assets/icon/` (Pillow); the build takes them from there and needs no Python.
 - C++ is formatted with clang-format 22.1.8 (`.clang-format`), which the pre-commit hook and CI check. In a fresh clone:

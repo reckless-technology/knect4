@@ -143,8 +143,8 @@ inline reckless::view::Button::Painter PlatePainter()
  */
 inline void DrawChoicePlate(reckless::gfx::Canvas &c, reckless::gfx::RectI bounds, reckless::view::Button::Look look)
 {
-    reckless::look::DrawButtonPlate(c, Buttons(), bounds, false, look.over, look.held);
-    if (look.on)
+    reckless::look::DrawButtonPlate(c, Buttons(), bounds, false, look.over && !look.dimmed, look.held);
+    if (look.on && !look.dimmed)
     {
         const reckless::gfx::RectF plate = bounds.ToFloat().Reduced(1.5f);
         c.SetColor(kAmber.WithAlpha(0.16f));
@@ -152,6 +152,20 @@ inline void DrawChoicePlate(reckless::gfx::Canvas &c, reckless::gfx::RectI bound
         c.SetColor(kAmber);
         c.DrawRoundedRect(plate, 4.0f, 1.5f);
     }
+}
+
+/**
+ * A choice's caption colour: amber while it is the one taken, faint while it cannot be chosen.
+ * @param look How the plate stands.
+ * @return The colour.
+ */
+inline Color ChoiceInk(reckless::view::Button::Look look)
+{
+    if (look.dimmed)
+    {
+        return kInk.WithAlpha(0.35f);
+    }
+    return look.on ? kAmber.Brighter(0.25f) : kInk;
 }
 
 /**
@@ -164,7 +178,7 @@ inline reckless::view::Button::Painter ChoicePainter()
               reckless::view::Button::Look look) {
         DrawChoicePlate(c, bounds, look);
         c.SetFont(fonts::Plate());
-        c.SetColor(look.on ? kAmber.Brighter(0.25f) : kInk);
+        c.SetColor(ChoiceInk(look));
         c.DrawText(text,
                    reckless::gfx::RectF{4.0f, 0.0f, static_cast<float>(bounds.width()) - 8.0f,
                                         static_cast<float>(bounds.height())},

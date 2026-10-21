@@ -14,17 +14,19 @@ namespace knect4::app
 /** The menu's commands, as the bar reports them. */
 enum Command : int
 {
-    kNoCommand      = 0,  ///< Nothing.
-    kNewGame        = 1,  ///< A new game.
-    kEasy           = 2,  ///< Level: Easy.
-    kMedium         = 3,  ///< Level: Medium.
-    kHard           = 4,  ///< Level: Hard.
-    kRedPucks       = 5,  ///< The person plays red.
-    kYellowPucks    = 6,  ///< The person plays yellow.
-    kPersonStarts   = 7,  ///< The person starts the next game.
-    kComputerStarts = 8,  ///< The computer does.
-    kSound          = 9,  ///< The sound on or off.
-    kQuit           = 10, ///< The app ends.
+    kNoCommand       = 0,  ///< Nothing.
+    kNewGame         = 1,  ///< A new game.
+    kEasy            = 2,  ///< Level: Easy.
+    kMedium          = 3,  ///< Level: Medium.
+    kHard            = 4,  ///< Level: Hard.
+    kRedPucks        = 5,  ///< The person plays red.
+    kYellowPucks     = 6,  ///< The person plays yellow.
+    kPersonStarts    = 7,  ///< The person starts the next game.
+    kComputerStarts  = 8,  ///< The computer does.
+    kSound           = 9,  ///< The sound on or off.
+    kQuit            = 10, ///< The app ends.
+    kAgainstComputer = 11, ///< Play against the computer.
+    kAgainstFriend   = 12, ///< Two people play each other.
 };
 
 /**

@@ -128,8 +128,8 @@ TEST(Controller, EndsTheGameWithTheLineLitAndScoresIt)
     ASSERT_EQ(controller.phase(), Phase::kPersonToMove);
     ASSERT_TRUE(controller.Drop(3));
     ASSERT_TRUE(RunUntil(controller, [&] { return controller.IsOver(); }));
-    EXPECT_EQ(controller.phase(), Phase::kPersonWon);
-    EXPECT_EQ(controller.score().person, 1);
+    EXPECT_EQ(controller.phase(), Phase::kWon);
+    EXPECT_EQ(controller.score().min_wins, 1);
     const BoardPicture picture = controller.Picture();
     EXPECT_EQ(picture.winning.size(), 4u);
     EXPECT_EQ(picture.banner, "You win!");
@@ -139,7 +139,7 @@ TEST(Controller, EndsTheGameWithTheLineLitAndScoresIt)
     // A new game keeps the score.
     controller.NewGame();
     EXPECT_EQ(controller.MovesMade(), 0);
-    EXPECT_EQ(controller.score().person, 1);
+    EXPECT_EQ(controller.score().min_wins, 1);
     EXPECT_TRUE(controller.Picture().banner.empty());
 }
 
@@ -147,9 +147,9 @@ TEST(Controller, CountsTheComputersWinAndADraw)
 {
     Controller controller(nullptr);
     controller.PlaceMoves({0, 3, 0, 3, 1, 3, 6, 3});
-    EXPECT_EQ(controller.phase(), Phase::kComputerWon);
+    EXPECT_EQ(controller.phase(), Phase::kWon);
     EXPECT_EQ(controller.StatusText(), "I win");
-    EXPECT_EQ(controller.score().computer, 1);
+    EXPECT_EQ(controller.score().max_wins, 1);
 
     // A game played to a full board with no four: found by a search for a board with none whose pucks can be dropped
     // in turn.
@@ -159,7 +159,7 @@ TEST(Controller, CountsTheComputersWinAndADraw)
     EXPECT_EQ(controller.phase(), Phase::kDrawn);
     EXPECT_EQ(controller.StatusText(), "A draw");
     EXPECT_EQ(controller.score().drawn, 1);
-    EXPECT_EQ(controller.score().computer, 1);
+    EXPECT_EQ(controller.score().max_wins, 1);
 }
 
 TEST(Controller, HoldsThePersonsPuckOverTheColumnUnderThePointer)
@@ -278,6 +278,134 @@ TEST(Menus, TickTheSettingsAndCarryOutTheirCommands)
     EXPECT_TRUE(has_quit);
     RunCommand(kNewGame, controller, {});
     EXPECT_EQ(controller.phase(), Phase::kComputerThinking);
+}
+
+/** @return Choices for a game between two people, Red starting. */
+Settings TwoPlayers()
+{
+    Settings settings;
+    settings.is_two_player = true;
+    return settings;
+}
+
+TEST(TwoPlayers, TakeTurnsWithTheHandInEachOnesColour)
+{
+    Clicks     clicks;
+    Controller controller(&clicks, TwoPlayers());
+    EXPECT_EQ(controller.phase(), Phase::kPersonToMove);
+    EXPECT_EQ(controller.mover(), kMin);
+    EXPECT_EQ(controller.StatusText(), "Red to move");
+    EXPECT_EQ(controller.Picture().person.body, theme::kRed.body);
+    EXPECT_EQ(controller.Picture().computer.body, theme::kYellow.body);
+
+    // Red drops; once it lands it is Yellow's turn, a person's again - no search, no computer.
+    ASSERT_TRUE(controller.Drop(3));
+    ASSERT_TRUE(RunUntil(controller, [&] { return controller.phase() != Phase::kDropping; }));
+    EXPECT_FALSE(clicks.heard.empty());
+    EXPECT_EQ(controller.phase(), Phase::kPersonToMove);
+    EXPECT_EQ(controller.mover(), kMax);
+    EXPECT_EQ(controller.StatusText(), "Yellow to move");
+    controller.Hover(4);
+    controller.Frame(0.25);
+    ASSERT_TRUE(controller.Picture().held.has_value());
+    EXPECT_EQ(controller.Picture().held->player, kMax);
+
+    // Yellow's puck lands Yellow's.
+    ASSERT_TRUE(controller.Drop(4));
+    ASSERT_TRUE(RunUntil(controller, [&] { return controller.phase() != Phase::kDropping; }));
+    EXPECT_EQ(controller.game().At(3, 0), kMin);
+    EXPECT_EQ(controller.game().At(4, 0), kMax);
+    EXPECT_EQ(controller.mover(), kMin);
+}
+
+TEST(TwoPlayers, NameTheWinnerByColourAndKeepAScoreOfTheirOwn)
+{
+    Controller controller(nullptr, TwoPlayers());
+    // Red across the bottom, Yellow on top of each; Yellow's fourth would come next, but Red's comes first.
+    controller.PlaceMoves({0, 0, 1, 1, 2, 2});
+    ASSERT_EQ(controller.mover(), kMin);
+    ASSERT_TRUE(controller.Drop(3));
+    ASSERT_TRUE(RunUntil(controller, [&] { return controller.IsOver(); }));
+    EXPECT_EQ(controller.phase(), Phase::kWon);
+    EXPECT_EQ(controller.winner(), kMin);
+    EXPECT_EQ(controller.StatusText(), "Red wins!");
+    EXPECT_EQ(controller.Picture().banner, "Red wins!");
+    EXPECT_EQ(controller.Picture().banner_colour, theme::kRed.light);
+    EXPECT_EQ(controller.score().min_wins, 1);
+
+    // Yellow's win, counted for Yellow.
+    controller.PlaceMoves({0, 6, 0, 6, 1, 6, 2, 6});
+    EXPECT_EQ(controller.winner(), kMax);
+    EXPECT_EQ(controller.StatusText(), "Yellow wins!");
+    EXPECT_EQ(controller.score().max_wins, 1);
+
+    // The games against the computer are counted apart.
+    controller.SetTwoPlayer(false);
+    EXPECT_EQ(controller.score().min_wins, 0);
+    EXPECT_EQ(controller.score().max_wins, 0);
+    controller.SetTwoPlayer(true);
+    EXPECT_EQ(controller.score().min_wins, 1);
+}
+
+TEST(TwoPlayers, LetYellowStartAndBeginAfreshWhenTheOpponentChanges)
+{
+    Settings settings          = TwoPlayers();
+    settings.does_person_start = false;
+    Controller controller(nullptr, settings);
+    EXPECT_EQ(controller.phase(), Phase::kPersonToMove);
+    EXPECT_EQ(controller.mover(), kMax);
+    EXPECT_EQ(controller.StatusText(), "Yellow to move");
+
+    // A game under way is left for a new one when the opponent changes: against the computer, the computer starts.
+    ASSERT_TRUE(controller.Drop(2));
+    controller.SetTwoPlayer(false);
+    EXPECT_EQ(controller.MovesMade(), 0);
+    EXPECT_EQ(controller.phase(), Phase::kComputerThinking);
+    // Choosing what is already chosen leaves the game alone.
+    controller.SetTwoPlayer(false);
+    EXPECT_EQ(controller.phase(), Phase::kComputerThinking);
+}
+
+TEST(TwoPlayers, IgnoreTheComputerChoicesInTheirColours)
+{
+    // The person's colour choice is the computer game's; between two people Red is always kMin.
+    Settings settings      = TwoPlayers();
+    settings.is_person_red = false;
+    Controller controller(nullptr, settings);
+    EXPECT_EQ(controller.ColoursOf(kMin).body, theme::kRed.body);
+    controller.SetTwoPlayer(false);
+    EXPECT_EQ(controller.ColoursOf(kMin).body, theme::kYellow.body);
+}
+
+TEST(Menus, OfferAFriendAndDimWhatTwoPlayersDoNotUse)
+{
+    Controller controller(nullptr);
+    const auto find = [](const reckless::app::MenuBar &bar, int command) {
+        for (const reckless::app::MenuEntry &entry : bar.menus[0].submenu)
+        {
+            if (entry.id == command)
+            {
+                return entry;
+            }
+        }
+        return reckless::app::MenuEntry{};
+    };
+    reckless::app::MenuBar bar = BuildMenuBar(controller.settings());
+    EXPECT_TRUE(find(bar, kAgainstComputer).checked);
+    EXPECT_TRUE(find(bar, kEasy).enabled);
+    EXPECT_EQ(find(bar, kPersonStarts).title, "You start");
+
+    RunCommand(kAgainstFriend, controller, {});
+    EXPECT_TRUE(controller.settings().is_two_player);
+    bar = BuildMenuBar(controller.settings());
+    EXPECT_TRUE(find(bar, kAgainstFriend).checked);
+    EXPECT_FALSE(find(bar, kEasy).enabled);
+    EXPECT_FALSE(find(bar, kRedPucks).enabled);
+    EXPECT_EQ(find(bar, kPersonStarts).title, "Red starts");
+    EXPECT_EQ(find(bar, kComputerStarts).title, "Yellow starts");
+
+    RunCommand(kAgainstComputer, controller, {});
+    EXPECT_FALSE(controller.settings().is_two_player);
 }
 
 } // namespace

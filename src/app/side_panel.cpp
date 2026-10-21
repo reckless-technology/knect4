@@ -25,9 +25,17 @@ reckless::view::Button::Painter ColourPlatePainter(theme::PuckColours colours)
     return [colours](reckless::gfx::Canvas &c, RectI bounds, std::string_view text, reckless::view::Button::Look look) {
         theme::DrawChoicePlate(c, bounds, look);
         const float radius = static_cast<float>(bounds.height()) * 0.3f;
+        if (look.dimmed)
+        {
+            c.BeginTransparencyLayer(0.4f);
+        }
         art::DrawPuck(c, {14.0f + radius, static_cast<float>(bounds.height()) / 2.0f}, radius, colours);
+        if (look.dimmed)
+        {
+            c.EndTransparencyLayer();
+        }
         c.SetFont(fonts::Plate());
-        c.SetColor(look.on ? theme::kAmber.Brighter(0.25f) : theme::kInk);
+        c.SetColor(theme::ChoiceInk(look));
         const float left = 20.0f + 2.0f * radius;
         c.DrawText(
             text,
@@ -47,25 +55,32 @@ ScoreView::ScoreView()
     SetInterceptsMouse(false, false);
 }
 
-void ScoreView::SetScore(const Score &score)
+void ScoreView::SetScore(const Score &score, bool is_two_player)
 {
-    if (score.person != score_.person || score.computer != score_.computer || score.drawn != score_.drawn)
+    if (score.min_wins != score_.min_wins || score.max_wins != score_.max_wins || score.drawn != score_.drawn ||
+        is_two_player != is_two_player_)
     {
-        score_ = score;
+        score_         = score;
+        is_two_player_ = is_two_player;
         Repaint();
     }
 }
 
 void ScoreView::Paint(reckless::gfx::Canvas &c)
 {
-    const std::array<std::pair<int, const char *>, 3> counts{
-        {{score_.person, "You"}, {score_.computer, "Computer"}, {score_.drawn, "Drawn"}}};
-    const float column_width = static_cast<float>(width()) / 3.0f;
+    // Against the computer the person's wins in the good colour and the computer's in the bad; between two people each
+    // side's in its own pucks' colour.
+    const std::array<std::pair<int, const char *>, 3> counts{{{score_.min_wins, is_two_player_ ? "Red" : "You"},
+                                                              {score_.max_wins, is_two_player_ ? "Yellow" : "Computer"},
+                                                              {score_.drawn, "Drawn"}}};
+    const std::array<reckless::gfx::Color, 3> colours{is_two_player_ ? theme::kRed.light : theme::kGood,
+                                                      is_two_player_ ? theme::kYellow.body : theme::kBad, theme::kInk};
+    const float                               column_width = static_cast<float>(width()) / 3.0f;
     for (std::size_t index = 0; index < counts.size(); ++index)
     {
         const float left = column_width * static_cast<float>(index);
         c.SetFont(fonts::Count());
-        c.SetColor(index == 0 ? theme::kGood : (index == 1 ? theme::kBad : theme::kInk));
+        c.SetColor(colours[index]);
         c.DrawText(std::to_string(counts[index].first), RectF{left, 0.0f, column_width, 42.0f},
                    reckless::gfx::Justify::kCentred, false);
         c.SetFont(fonts::Small());
@@ -87,13 +102,25 @@ SidePanel::SidePanel()
     {
         AddChild(*line);
     }
-    level_section_   = std::make_unique<reckless::app::Section>(shell, "Level");
-    colour_section_  = std::make_unique<reckless::app::Section>(shell, "Your pucks");
-    starter_section_ = std::make_unique<reckless::app::Section>(shell, "First move");
-    score_section_   = std::make_unique<reckless::app::Section>(shell, "Score");
-    for (auto *section : {level_section_.get(), colour_section_.get(), starter_section_.get(), score_section_.get()})
+    opponent_section_ = std::make_unique<reckless::app::Section>(shell, "Play against");
+    level_section_    = std::make_unique<reckless::app::Section>(shell, "Level");
+    colour_section_   = std::make_unique<reckless::app::Section>(shell, "Your pucks");
+    starter_section_  = std::make_unique<reckless::app::Section>(shell, "First move");
+    score_section_    = std::make_unique<reckless::app::Section>(shell, "Score");
+    for (auto *section : {opponent_section_.get(), level_section_.get(), colour_section_.get(), starter_section_.get(),
+                          score_section_.get()})
     {
         AddChild(*section);
+    }
+
+    for (const bool is_two_player : {false, true})
+    {
+        opponents_[is_two_player ? 1 : 0] = AddChoice(is_two_player ? "A friend" : "Computer", [this, is_two_player] {
+            if (on_opponent)
+            {
+                on_opponent(is_two_player);
+            }
+        });
     }
 
     const std::array<std::pair<const char *, Level>, 3> levels{
@@ -167,23 +194,37 @@ std::unique_ptr<reckless::view::Button> SidePanel::AddChoice(std::string text, s
 void SidePanel::Show(const Controller &controller)
 {
     const Settings &settings = controller.settings();
+    const bool      is_two   = settings.is_two_player;
     headline_->SetText(controller.StatusText());
-    headline_->SetColour(controller.phase() == Phase::kPersonWon
-                             ? theme::kGood
-                             : (controller.phase() == Phase::kComputerWon ? theme::kBad : theme::kInk));
+    reckless::gfx::Color headline_colour = theme::kInk;
+    if (controller.phase() == Phase::kWon)
+    {
+        headline_colour = is_two ? controller.ColoursOf(controller.winner()).light
+                                 : (controller.winner() == kMin ? theme::kGood : theme::kBad);
+    }
+    headline_->SetColour(headline_colour);
     static constexpr std::array<const char *, 3> kLevelNames{"Easy", "Medium", "Hard"};
-    detail_->SetText(std::string(settings.is_person_red ? "You play red" : "You play yellow") + "  ·  " +
-                     kLevelNames[static_cast<std::size_t>(settings.level)]);
+    detail_->SetText(is_two ? std::string("Two players  ·  Red and Yellow take turns")
+                            : std::string(settings.is_person_red ? "You play red" : "You play yellow") + "  ·  " +
+                                  kLevelNames[static_cast<std::size_t>(settings.level)]);
+    opponents_[0]->SetOn(!is_two);
+    opponents_[1]->SetOn(is_two);
+    // Between two people there is no computer to set a level for, and the colours are the players' names.
     for (std::size_t index = 0; index < levels_.size(); ++index)
     {
         levels_[index]->SetOn(static_cast<std::size_t>(settings.level) == index);
+        levels_[index]->SetDimmed(is_two);
     }
     colours_[0]->SetOn(settings.is_person_red);
     colours_[1]->SetOn(!settings.is_person_red);
+    colours_[0]->SetDimmed(is_two);
+    colours_[1]->SetDimmed(is_two);
+    starters_[0]->SetText(is_two ? "Red" : "You");
+    starters_[1]->SetText(is_two ? "Yellow" : "Computer");
     starters_[0]->SetOn(settings.does_person_start);
     starters_[1]->SetOn(!settings.does_person_start);
     sound_->SetOn(settings.has_sound);
-    score_->SetScore(controller.score());
+    score_->SetScore(controller.score(), is_two);
 }
 
 void SidePanel::Paint(reckless::gfx::Canvas &c)
@@ -219,6 +260,7 @@ void SidePanel::Resized()
         }
         y += section_height + 12;
     };
+    lay_row(*opponent_section_, opponents_);
     lay_row(*level_section_, levels_);
     lay_row(*colour_section_, colours_);
     lay_row(*starter_section_, starters_);

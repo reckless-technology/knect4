@@ -72,7 +72,11 @@ void Controller::NewGame()
     computer_column_ = 3;
     if (settings_.does_person_start)
     {
-        BeginPersonTurn();
+        BeginPersonTurn(kMin);
+    }
+    else if (settings_.is_two_player)
+    {
+        BeginPersonTurn(kMax);
     }
     else
     {
@@ -80,9 +84,10 @@ void Controller::NewGame()
     }
 }
 
-void Controller::BeginPersonTurn()
+void Controller::BeginPersonTurn(int player)
 {
     phase_ = Phase::kPersonToMove;
+    mover_ = player;
     // The person's puck appears where the pointer is, fading in, rather than gliding over from the computer's.
     held_column_  = static_cast<float>(held_target_);
     held_opacity_ = 0.0f;
@@ -145,7 +150,7 @@ bool Controller::Drop(int column)
         return false;
     }
     held_target_ = column;
-    StartDrop(column, kMin);
+    StartDrop(column, mover_);
     return true;
 }
 
@@ -191,7 +196,7 @@ void Controller::PlaceMoves(const std::vector<int> &columns)
     {
         Landed();
     }
-    else if (!settings_.does_person_start)
+    else if (!settings_.does_person_start && !settings_.is_two_player)
     {
         BeginComputerTurn(); // the search NewGame started, started again
     }
@@ -220,32 +225,28 @@ void Controller::Landed()
     if (game_.IsWinningMove(column, player))
     {
         winning_ = game_.WinningLine(column);
-        if (player == kMin)
-        {
-            phase_ = Phase::kPersonWon;
-            ++score_.person;
-        }
-        else
-        {
-            phase_ = Phase::kComputerWon;
-            ++score_.computer;
-        }
+        phase_   = Phase::kWon;
+        ++(player == kMin ? CurrentScore().min_wins : CurrentScore().max_wins);
         glow_time_ = 0.0;
         return;
     }
     if (game_.IsDraw(column, player))
     {
         phase_ = Phase::kDrawn;
-        ++score_.drawn;
+        ++CurrentScore().drawn;
         return;
     }
-    if (player == kMin)
+    if (settings_.is_two_player)
+    {
+        BeginPersonTurn(-player);
+    }
+    else if (player == kMin)
     {
         BeginComputerTurn();
     }
     else
     {
-        BeginPersonTurn();
+        BeginPersonTurn(kMin);
     }
 }
 
@@ -306,8 +307,7 @@ void Controller::Frame(double seconds)
         }
         break;
     }
-    case Phase::kPersonWon:
-    case Phase::kComputerWon:
+    case Phase::kWon:
     case Phase::kDrawn:
         glow_time_ += seconds;
         break;
@@ -334,6 +334,27 @@ void Controller::SetSound(bool has_sound)
     settings_.has_sound = has_sound;
 }
 
+void Controller::SetTwoPlayer(bool is_two_player)
+{
+    if (is_two_player != settings_.is_two_player)
+    {
+        settings_.is_two_player = is_two_player;
+        NewGame();
+    }
+}
+
+Score &Controller::CurrentScore() noexcept
+{
+    return settings_.is_two_player ? two_player_score_ : score_;
+}
+
+const theme::PuckColours &Controller::ColoursOf(int player) const noexcept
+{
+    // Between two people Red is always kMin; against the computer the person's colour is their choice.
+    const bool is_red = settings_.is_two_player ? player == kMin : (player == kMin) == settings_.is_person_red;
+    return is_red ? theme::kRed : theme::kYellow;
+}
+
 BoardPicture Controller::Picture() const
 {
     BoardPicture picture;
@@ -344,8 +365,8 @@ BoardPicture Controller::Picture() const
             picture.pieces[static_cast<std::size_t>(column)][static_cast<std::size_t>(row)] = game_.At(column, row);
         }
     }
-    picture.person   = settings_.is_person_red ? theme::kRed : theme::kYellow;
-    picture.computer = settings_.is_person_red ? theme::kYellow : theme::kRed;
+    picture.person   = ColoursOf(kMin);
+    picture.computer = ColoursOf(kMax);
     if (motion_)
     {
         // The falling puck is in the game already; it shows falling, not at rest.
@@ -359,7 +380,7 @@ BoardPicture Controller::Picture() const
         picture.may_choose = true;
         if (held_opacity_ > 0.0f)
         {
-            picture.held = HeldPuck{held_column_, kMin, is_held_shown_ ? held_target_ : -1, held_opacity_};
+            picture.held = HeldPuck{held_column_, mover_, is_held_shown_ ? held_target_ : -1, held_opacity_};
         }
         break;
     case Phase::kComputerThinking: {
@@ -374,14 +395,23 @@ BoardPicture Controller::Picture() const
         break;
     case Phase::kDropping:
         break;
-    case Phase::kPersonWon:
-    case Phase::kComputerWon:
+    case Phase::kWon:
     case Phase::kDrawn:
         picture.winning = winning_;
         picture.glow    = static_cast<float>(0.5 + 0.5 * std::cos(glow_time_ * 2.0 * std::numbers::pi * 0.8));
         picture.banner  = StatusText();
-        picture.banner_colour =
-            phase_ == Phase::kPersonWon ? theme::kGood : (phase_ == Phase::kComputerWon ? theme::kBad : theme::kInk);
+        if (phase_ == Phase::kDrawn)
+        {
+            picture.banner_colour = theme::kInk;
+        }
+        else if (settings_.is_two_player)
+        {
+            picture.banner_colour = ColoursOf(winner()).light; // between two people, the winner's own colour
+        }
+        else
+        {
+            picture.banner_colour = winner() == kMin ? theme::kGood : theme::kBad;
+        }
         break;
     }
     return picture;
@@ -389,6 +419,22 @@ BoardPicture Controller::Picture() const
 
 std::string Controller::StatusText() const
 {
+    if (settings_.is_two_player)
+    {
+        const auto name = [](int player) { return player == kMin ? std::string("Red") : std::string("Yellow"); };
+        switch (phase_)
+        {
+        case Phase::kPersonToMove:
+            return name(mover_) + " to move";
+        case Phase::kDropping:
+            return name(falling_player_) + " to move";
+        case Phase::kWon:
+            return name(winner()) + " wins!";
+        case Phase::kDrawn:
+        default:
+            return "A draw";
+        }
+    }
     switch (phase_)
     {
     case Phase::kPersonToMove:
@@ -398,10 +444,8 @@ std::string Controller::StatusText() const
         return "Thinking…";
     case Phase::kDropping:
         return falling_player_ == kMin ? "Your move" : "Thinking…";
-    case Phase::kPersonWon:
-        return "You win!";
-    case Phase::kComputerWon:
-        return "I win";
+    case Phase::kWon:
+        return winner() == kMin ? "You win!" : "I win";
     case Phase::kDrawn:
     default:
         return "A draw";

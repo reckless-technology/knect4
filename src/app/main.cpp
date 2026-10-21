@@ -84,6 +84,7 @@ int main(int argc, char **argv)
     board.on_drop_held            = [&] { controller.DropHeld(); };
     board.on_play_again           = [&] { controller.NewGame(); };
     knect4::app::SidePanel &panel = view.panel();
+    panel.on_opponent             = [&](bool is_two_player) { controller.SetTwoPlayer(is_two_player); };
     panel.on_level                = [&](knect4::app::Level level) { controller.SetLevel(level); };
     panel.on_colour               = [&](bool is_person_red) { controller.SetPersonRed(is_person_red); };
     panel.on_starter              = [&](bool does_person_start) { controller.SetPersonStarts(does_person_start); };

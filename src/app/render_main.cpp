@@ -1,6 +1,6 @@
 // The window drawn to a PNG with a game in a chosen state, for review images and the docs: `mid` (a game under way,
-// a puck falling, the person's puck held), `won` (the person's four lit, the banner shown), `lost`, `empty`; and with
-// `icon <size>` the app's icon, a puck on a corner of the board, at that size.
+// the person's puck held), `drop` (it falling), `won` (the person's four lit, the banner shown), `lost`, `empty`,
+// `friend` (two people, Yellow to move) and `friend-won` (Yellow's four); and with `icon <size>` the app's icon.
 
 #include "app/board_art.h"
 #include "app/board_view.h"
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
 {
     if (argc < 2)
     {
-        std::fprintf(stderr, "usage: knect4_render <out.png> [mid|won|lost|empty] [scale]\n"
+        std::fprintf(stderr, "usage: knect4_render <out.png> [mid|drop|won|lost|empty|friend|friend-won] [scale]\n"
                              "       knect4_render <out.png> icon <size>\n");
         return 2;
     }
@@ -127,9 +127,24 @@ int main(int argc, char **argv)
     }
     const float scale = argc > 3 ? static_cast<float>(std::atof(argv[3])) : 1.0f;
 
-    // The person starts every game set up here: their pucks are the odd moves.
-    knect4::app::Controller controller(nullptr);
-    if (state == "mid" || state == "drop")
+    // The person (between two people, Red) starts every game set up here: their pucks are the odd moves.
+    knect4::app::Settings settings;
+    settings.is_two_player = state == "friend" || state == "friend-won";
+    knect4::app::Controller controller(nullptr, settings);
+    if (state == "friend")
+    {
+        // Two people: Yellow's turn, Yellow's puck held over column 4.
+        controller.PlaceMoves({3, 3, 2, 4, 4, 2, 5, 1, 3});
+        controller.Hover(4);
+        controller.Frame(0.25);
+    }
+    else if (state == "friend-won")
+    {
+        // Yellow's four up the diagonal from (1,0), dropped last.
+        controller.PlaceMoves({2, 1, 3, 2, 4, 4, 3, 3, 4});
+        controller.Drop(4);
+    }
+    else if (state == "mid" || state == "drop")
     {
         // The person's turn, their puck held over column 5 - or dropped, half way down.
         controller.PlaceMoves({3, 3, 2, 4, 4, 2, 5, 1, 3, 3});

@@ -34,9 +34,10 @@ int DepthOf(Level level) noexcept;
 /** What the person has chosen. */
 struct Settings
 {
+    bool  is_two_player{false};    ///< Two people play each other; else the person plays the computer.
     Level level{Level::kMedium};   ///< How hard the computer plays.
     bool  is_person_red{true};     ///< The person's pucks are red, the computer's yellow; else the other way round.
-    bool  does_person_start{true}; ///< The person drops the first puck of each new game.
+    bool  does_person_start{true}; ///< The person (between two people, Red) drops the first puck of each new game.
     bool  has_sound{true};         ///< Each landing clicks.
 
     /**
@@ -46,23 +47,22 @@ struct Settings
     bool operator==(const Settings &other) const = default;
 };
 
-/** The games so far. */
+/** The games so far, of one kind: against the computer, or between two people. */
 struct Score
 {
-    int person{0};   ///< Games the person won.
-    int computer{0}; ///< Games the computer won.
+    int min_wins{0}; ///< Games kMin won: the person against the computer, Red between two people.
+    int max_wins{0}; ///< Games kMax won: the computer, or Yellow.
     int drawn{0};    ///< Games drawn.
 };
 
 /** Where a game stands. */
 enum class Phase
 {
-    kPersonToMove,     ///< The person chooses a column.
+    kPersonToMove,     ///< A person chooses a column: the person, or between two people the one whose turn it is.
     kComputerThinking, ///< The computer searches.
     kComputerAiming,   ///< Its puck glides to the column it chose.
     kDropping,         ///< A puck falls.
-    kPersonWon,        ///< The game is over: the person made four.
-    kComputerWon,      ///< The computer did.
+    kWon,              ///< The game is over: one side made four (winner()).
     kDrawn,            ///< The board filled.
 };
 
@@ -81,8 +81,10 @@ class ClickSink
 };
 
 /**
- * The game: the person kMin, the computer kMax, as in the original. Frame() moves it on - the search polled, the held
- * puck glided, the falling puck moved and its landings clicked - and the views read Picture() and the rest.
+ * The game: the person kMin, the computer kMax, as in the original; between two people Red is kMin and Yellow kMax,
+ * each dropping in turn with the same hand the person uses against the computer. Frame() moves it on - the search
+ * polled, the held puck glided, the falling puck moved and its landings clicked - and the views read Picture() and the
+ * rest.
  *
  * The computer's turn is paced for a person to follow: its puck appears above the board and sways while it thinks,
  * waits at least kLeastThinking whatever the search took, then glides to its column and drops.
@@ -156,6 +158,18 @@ class Controller
     /** @param has_sound Whether landings click. */
     void SetSound(bool has_sound);
 
+    /**
+     * Against the computer or between two people; a change begins a new game.
+     * @param is_two_player Whether two people play each other.
+     */
+    void SetTwoPlayer(bool is_two_player);
+
+    /**
+     * @param player kMin or kMax.
+     * @return The colours that side's pucks are drawn in.
+     */
+    const theme::PuckColours &ColoursOf(int player) const noexcept;
+
     /** @return The board as it should be drawn now. */
     BoardPicture Picture() const;
 
@@ -168,10 +182,25 @@ class Controller
     /** @return Whether the game is over. */
     bool IsOver() const noexcept
     {
-        return phase_ == Phase::kPersonWon || phase_ == Phase::kComputerWon || phase_ == Phase::kDrawn;
+        return phase_ == Phase::kWon || phase_ == Phase::kDrawn;
     }
 
-    /** @return The game's state in a few words: "Your move", "Thinking…", "You win!". */
+    /** @return Who made four, kMin or kMax, once the game is won; kEmpty before then and in a draw. */
+    int winner() const noexcept
+    {
+        return phase_ == Phase::kWon ? falling_player_ : kEmpty;
+    }
+
+    /** @return Whose puck a person holds now: kMin, or between two people whichever side's turn it is. */
+    int mover() const noexcept
+    {
+        return mover_;
+    }
+
+    /**
+     * @return The game's state in a few words: "Your move", "Thinking…", "You win!"; between two people "Red to
+     *         move", "Yellow wins!".
+     */
     std::string StatusText() const;
 
     /** @return The person's choices. */
@@ -180,10 +209,10 @@ class Controller
         return settings_;
     }
 
-    /** @return The games so far. */
+    /** @return The games so far of the kind being played: against the computer, or between two people. */
     const Score &score() const noexcept
     {
-        return score_;
+        return settings_.is_two_player ? two_player_score_ : score_;
     }
 
     /** @return The board. */
@@ -202,8 +231,14 @@ class Controller
     /** The computer's turn begun: its puck shown, its search started on a thread of its own. */
     void BeginComputerTurn();
 
-    /** The person's turn begun. */
-    void BeginPersonTurn();
+    /**
+     * A person's turn begun.
+     * @param player Whose puck they hold: kMin, or between two people either.
+     */
+    void BeginPersonTurn(int player);
+
+    /** @return The score of the kind of game being played, to count a result in. */
+    Score &CurrentScore() noexcept;
 
     /**
      * A puck of `player`'s dropped into `column` from where the held puck hangs.
@@ -228,10 +263,12 @@ class Controller
 
     ClickSink *clicks_;                      ///< Where the clicks go; may be null.
     Settings   settings_;                    ///< The person's choices.
-    Score      score_;                       ///< The games so far.
+    Score      score_;                       ///< The games against the computer so far.
+    Score      two_player_score_;            ///< The games between two people so far.
     Game       game_;                        ///< The board, with the falling puck already in it.
     Phase      phase_{Phase::kPersonToMove}; ///< Where the game stands.
     int        moves_made_{0};               ///< Pucks dropped this game.
+    int        mover_{kMin};                 ///< Whose puck a person holds.
 
     float held_column_{3.0f};    ///< Where the held puck hangs, gliding toward its target.
     int   held_target_{3};       ///< The column it glides to.

@@ -47,6 +47,7 @@ class SettingsFileTest : public ::testing::Test
 TEST_F(SettingsFileTest, KeepsEveryChoiceAcrossAWriteAndARead)
 {
     Settings settings;
+    settings.is_two_player           = true;
     settings.level                   = Level::kHard;
     settings.is_person_red           = false;
     settings.does_person_start       = false;
@@ -71,8 +72,9 @@ TEST_F(SettingsFileTest, ReadsTheDefaultsWhereThereIsNothingToRead)
 
 TEST_F(SettingsFileTest, TakesTheDefaultForAChoiceThatMakesNoSense)
 {
-    const Settings read = ReadSettings(
-        Holding(R"({"level": "impossible", "your_colour": 7, "first_move": "computer", "sound": "loud"})"));
+    const Settings read = ReadSettings(Holding(
+        R"({"opponent": "robot", "level": "impossible", "your_colour": 7, "first_move": "computer", "sound": "loud"})"));
+    EXPECT_FALSE(read.is_two_player);
     EXPECT_EQ(read.level, Level::kMedium);
     EXPECT_TRUE(read.is_person_red);
     EXPECT_FALSE(read.does_person_start);
