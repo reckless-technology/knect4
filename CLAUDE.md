@@ -3,8 +3,9 @@
 Guidance for Claude Code in this repository. The README is the long-form reference: the game, the feel, building, CI.
 
 Knect 4, against the computer or between two people at one board, C++20, its window on reckless-toolkit (a private submodule at
-`external/reckless-toolkit`, added with its GUI and its audio device layer on, its suites and ASIO off). Private;
-proprietary, Jonny Reckless's.
+`external/reckless-toolkit`, added with its GUI and its audio device layer on, its suites and ASIO off). A private
+repository; the game's own code is MIT-licensed (`LICENSE`), Jonny Reckless's, while the toolkit is proprietary, so
+outsiders can build the game core with `-DKNECT4_GUI=OFF` but not the window.
 
 ## Layout
 
@@ -24,6 +25,15 @@ proprietary, Jonny Reckless's.
   layer, default output), `theme.h` (the Reckless dark look: cream ink, amber accent, Noto Serif).
 - `tests/`: `knect4_game_test` (game and effects), `tests/app/knect4_app_test` (controller, menus and settings file),
   and the window's launch (`app_smoke`).
+- `THIRD-PARTY-NOTICES.txt`: written by `tools/third_party_notices.py <build-dir>` from the build's fetches and the
+  toolkit's pins (CTest `notices` checks it); the executable carries it and `LICENSE` as the embedded files
+  `third_party_notices.txt` and `licence.txt`. Write it again when the submodule moves.
+- `packaging/`: `stage.py`, then the Windows installer (Inno Setup), the macOS package with its uninstaller and the
+  Linux Debian package and tarball, each with a test script; `build.yml` makes them all unsigned on every pull request,
+  `release.yml` (a pushed `vMAJOR.MINOR`, or by hand with `dry_run`) builds them from nothing, signs where the secrets
+  are set, and leaves a draft release - never published, never promoted from here.
+- The version is `MAJOR.MINOR.BUILD` from the nearest `vMAJOR.MINOR` tag (`cmake/knect4_version.cmake`); 0.0.0 with no
+  tag reachable.
 - The name is Knect 4 (Jonny, 2026-10-21), chosen over the 2014 original's name, a third party's trademark.
 
 ## Rules
@@ -35,7 +45,9 @@ proprietary, Jonny Reckless's.
 - Every commit authored and committed as `Jonny Reckless <jonny@recklesstechnology.com>`
   (`git config core.hooksPath .githooks` installs the hooks that check it). Work on a branch, open a pull request, merge
   when CI is green.
-- CI runs on the organisation's self-hosted runners only (the repository is private).
+- CI runs on the organisation's self-hosted runners only (the repository is private): Windows, Linux (release with
+  the window under `xvfb-run`, coverage, AddressSanitizer with UndefinedBehaviorSanitizer, ThreadSanitizer) and macOS
+  universal.
 - The game is a consumer of the toolkit: a bump of the submodule points at a commit on the toolkit's `main` (CI checks).
 - Line coverage of `src/` stays at 95 % or more (CI's coverage job, gcc and gcovr on Linux; `tools/coverage-windows.ps1`
   on a Windows desk with clang-cl, which the Windows runners lack): every new behaviour gets a test; the views are
