@@ -202,7 +202,7 @@ jobs:
           retention-days: 30
 
   # Every suite under AddressSanitizer and UndefinedBehaviorSanitizer (the sanitize preset's options), the window's
-  # launch on Xvfb's display, with a leak a failure - but those of the sound servers' ALSA plugins, which the audio
+  # launch on Xvfb's display, with a leak a failure - but those of a desktop's PipeWire ALSA plugin, which the audio
   # suite reaches through RtAudio (tools/lsan_suppressions.txt). The audio suite opens the machine's own output: ALSA's
   # default device on a PulseAudio null sink here (.github/actions/sound-server). Tree build/ci-sanitize. So that a
   # kernel's wider mmap randomisation never meets the sanitizers' fixed shadow memory, the suites run with the address
