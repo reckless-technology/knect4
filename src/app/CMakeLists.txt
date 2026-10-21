@@ -16,8 +16,7 @@ add_library(knect4_gui STATIC
     main_view.cpp
     menus.cpp
     settings_file.cpp
-    side_panel.cpp
-    window_sizes.cpp)
+    side_panel.cpp)
 target_include_directories(knect4_gui PUBLIC "${PROJECT_SOURCE_DIR}/src" "${PROJECT_BINARY_DIR}/generated")
 target_link_libraries(knect4_gui
     PUBLIC  knect4_game knect4_effects knect4_assets reckless_app_shell reckless_common_panel reckless_gfx_skia

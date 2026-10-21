@@ -22,10 +22,10 @@ outsiders can build the game core with `-DKNECT4_GUI=OFF` but not the window.
   people - Red kMin, Yellow kMax - the search on a thread of its own through `std::async` with a stop flag, the
   computer's paced turn, the drop and its clicks, a score for each kind of game), `BoardView`
   (draws a `BoardPicture` scaled to fit; pucks behind the frame, held puck and banner in front), `board_art` (the
-  board's geometry for any size, and its drawing), `SidePanel`, `MainView`, `AboutView`, `WindowSizes` (Amphitheater's,
-  the size kept in the settings), `menus`, `settings_file` (the person's
-  choices in `reckless-technology/knect4/settings.json`, each read defensively), `ClickPlayer` (the toolkit's audio
-  layer, default output), `theme.h` (the Reckless dark look: cream ink, amber accent, Noto Serif).
+  board's geometry for any size, and its drawing), `SidePanel`, `MainView`, `AboutView`, `menus` (the View menu's
+  window sizes the toolkit's `WindowSizes`, `AppWindowSizes.h`, the size kept in the settings), `settings_file` (the
+  person's choices in `reckless-technology/knect4/settings.json`, each read defensively), `ClickPlayer` (the toolkit's
+  audio layer, default output), `theme.h` (the Reckless dark look: cream ink, amber accent, Noto Serif).
 - `tests/`: `knect4_game_test` (the board, the engine on every size - the solver held to exhaustive search - and the
   effects), `tests/app/knect4_app_test` (controller, menus, settings file, views painted and driven, the click player
   on the toolkit's offline audio API, window sizes), the render tool's runs and the window's launch (`app_smoke`).

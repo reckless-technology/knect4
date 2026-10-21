@@ -3,11 +3,12 @@
 #include "app/board_view.h"
 #include "app/controller.h"
 #include "app/main_view.h"
+#include "app/menus.h"
 #include "app/side_panel.h"
 #include "app/theme.h"
-#include "app/window_sizes.h"
 
 #include "AppRoot.h"
+#include "AppWindowSizes.h"
 #include "Button.h"
 #include "Embedded.h"
 #include "MenuBar.h"

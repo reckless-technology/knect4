@@ -10,7 +10,6 @@
 #include "app/menus.h"
 #include "app/settings_file.h"
 #include "app/theme.h"
-#include "app/window_sizes.h"
 #include "version.h"
 
 #include "AppPlatform.h"
@@ -57,9 +56,9 @@ int main(int argc, char **argv)
     {
         view.SetMenuBarView(platform->MakeMenuBarView(knect4::app::theme::MenuBarLook()));
     }
-    reckless::app::AppRoot   root(view, knect4::app::theme::Shell().Tooltip(), {},
-                                  {MainView::kLayoutWidth, MainView::kLayoutHeight});
-    knect4::app::WindowSizes sizes(root, {MainView::kDesignWidth, MainView::kDesignHeight});
+    reckless::app::AppRoot     root(view, knect4::app::theme::Shell().Tooltip(), {},
+                                    {MainView::kLayoutWidth, MainView::kLayoutHeight});
+    reckless::app::WindowSizes sizes(root, {MainView::kDesignWidth, MainView::kDesignHeight});
     sizes.Restore(saved.settings.window_percent);
 
     // Help > About: a card over the window, made when asked for and gone when closed.

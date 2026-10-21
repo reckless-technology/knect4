@@ -3,14 +3,18 @@
 /// what each command does.
 
 #include "controller.h"
-#include "window_sizes.h"
 
+#include "AppWindowSizes.h"
 #include "MenuBar.h"
 
 #include <functional>
 
 namespace knect4::app
 {
+
+using reckless::app::kWindowSizes;   ///< The View menu's sizes, the toolkit's (AppWindowSizes.h).
+using reckless::app::WindowSizeMenu; ///< What the View menu shows of them.
+using reckless::app::WindowSizes;    ///< The window held at them.
 
 /** The menu's commands, as the bar reports them. */
 enum Command : int
