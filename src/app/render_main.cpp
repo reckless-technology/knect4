@@ -174,8 +174,9 @@ int main(int argc, char **argv)
         controller.Frame(1.0 / 60.0);
     }
 
-    knect4::app::MainView view;
+    // The host before the view, so it outlives it: the view tells its host as it goes.
     RenderHost            host;
+    knect4::app::MainView view;
     view.SetHost(&host);
     view.SetBounds({knect4::app::MainView::kDesignWidth, knect4::app::MainView::kDesignHeight});
     view.Show(controller);

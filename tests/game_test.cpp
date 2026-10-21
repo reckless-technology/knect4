@@ -234,7 +234,6 @@ TEST(Game, PlaysAsTheOriginalPlayed)
         std::istringstream moves(line.substr(colon + 1));
         std::string        word;
         std::string        result;
-        bool               is_over = false;
         while (moves >> word)
         {
             const std::size_t slash = word.find('/');
@@ -256,7 +255,6 @@ TEST(Game, PlaysAsTheOriginalPlayed)
             const bool is_drawn = game.IsDraw(move, player);
             if (is_won || is_drawn)
             {
-                is_over = true;
                 ASSERT_TRUE(moves >> result);
                 EXPECT_EQ(result, is_drawn ? "D" : (player == kMax ? "X" : "O")) << line;
                 break;
