@@ -7,10 +7,10 @@ name: build
 # held to its stage as release.yml holds a release's; the game's line coverage held to 95 % (gcc on Linux); every suite
 # again under AddressSanitizer and UndefinedBehaviorSanitizer, and under ThreadSanitizer; and the C++ held to
 # clang-format 22.1.8. The repository is public, so every job runs on GitHub's hosted images (ubuntu-24.04,
-# windows-2025, macos-15), a fresh machine each job (.github/actions/cpp provides the toolchain). The window is built on the toolkit, a private submodule read through its
-# read-only deploy key (.github/actions/toolkit). Every checkout is whole (fetch-depth 0): the version every binary
-# reports is MAJOR.MINOR.BUILD from the nearest vMAJOR.MINOR tag (cmake/knect4_version.cmake), which a shallow clone
-# cuts off.
+# windows-2025, macos-15), a fresh machine each job (.github/actions/cpp provides the toolchain). The window is built
+# on the toolkit, a private submodule read through its read-only deploy key (.github/actions/toolkit). Every checkout
+# is whole (fetch-depth 0): the version every binary reports is MAJOR.MINOR.BUILD from the nearest vMAJOR.MINOR tag
+# (cmake/knect4_version.cmake), which a shallow clone cuts off.
 on:
   push:
     branches: [main]
@@ -334,7 +334,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
-        with:
       - name: clang-format 22.1.8
         run: |
           venv="$RUNNER_TOOL_CACHE/clang-format-22.1.8"
