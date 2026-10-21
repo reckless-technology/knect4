@@ -1,0 +1,23 @@
+name: A sound server
+description: >
+  An audio output for the suites that open the machine's own (ClickPlayer's), on a hosted Linux runner, which has no
+  sound card and whose kernel carries no ALSA dummy driver: PulseAudio started for the job's user with a null sink, and
+  ALSA's default device and control made PulseAudio's through its ALSA plugin - as a desktop's ALSA default is its
+  sound server's. RtAudio's ALSA back end lists the default device and runs on it as on a card: its callback thread
+  started, the stream started, stopped and closed, so the sanitizers see it.
+runs:
+  using: composite
+  steps:
+    - name: PulseAudio, a null sink, and ALSA's default on it
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get install -y -qq --no-install-recommends pulseaudio pulseaudio-utils libasound2-plugins alsa-utils \
+          > /dev/null
+        pulseaudio --daemonize=yes --exit-idle-time=-1 --log-target=stderr
+        for attempt in $(seq 1 50); do pactl info > /dev/null 2>&1 && break; sleep 0.1; done
+        pactl load-module module-null-sink sink_name=suites > /dev/null
+        pactl set-default-sink suites
+        printf 'pcm.!default { type pulse }\nctl.!default { type pulse }\n' > "$HOME/.asoundrc"
+        pactl info | grep -E '^(Server Name|Default Sink)'
+        aplay -L | grep -x default || { echo "::error::ALSA has no default device"; exit 1; }

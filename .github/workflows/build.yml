@@ -202,11 +202,11 @@ jobs:
           retention-days: 30
 
   # Every suite under AddressSanitizer and UndefinedBehaviorSanitizer (the sanitize preset's options), the window's
-  # launch on Xvfb's display, with a leak a failure - but those of a desktop's PipeWire ALSA plugin, which the audio
-  # suite reaches through RtAudio (tools/lsan_suppressions.txt). The audio suite opens the machine's own output, ALSA's
-  # dummy card here (.github/actions/sound-card). Tree build/ci-sanitize. So that a kernel's wider
-  # mmap randomisation never meets the sanitizers' fixed shadow memory, the suites run with the address space's
-  # randomisation off (setarch -R), which their children inherit.
+  # launch on Xvfb's display, with a leak a failure - but those of the sound servers' ALSA plugins, which the audio
+  # suite reaches through RtAudio (tools/lsan_suppressions.txt). The audio suite opens the machine's own output: ALSA's
+  # default device on a PulseAudio null sink here (.github/actions/sound-server). Tree build/ci-sanitize. So that a
+  # kernel's wider mmap randomisation never meets the sanitizers' fixed shadow memory, the suites run with the address
+  # space's randomisation off (setarch -R), which their children inherit.
   sanitizers:
     name: Linux sanitizers (address, undefined)
     runs-on: ubuntu-24.04
@@ -226,8 +226,8 @@ jobs:
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
-      - name: A sound card
-        uses: ./.github/actions/sound-card
+      - name: A sound server
+        uses: ./.github/actions/sound-server
       - name: Configure
         run: >
           cmake -S . -B build/ci-sanitize -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKNECT4_SANITIZE=ON
@@ -243,8 +243,8 @@ jobs:
 
   # Every suite under ThreadSanitizer (the tsan preset's options), its own build since it cannot share a process with
   # AddressSanitizer: the click mixer between the window's thread and the audio thread, the computer's search on a thread
-  # of its own, RtAudio's callback thread on ALSA's dummy card (.github/actions/sound-card). The prebuilt Skia is not
-  # instrumented, and draws on the calling thread alone. Nothing is suppressed (tools/tsan_suppressions.txt). Tree
+  # of its own, RtAudio's callback thread on ALSA's default device (.github/actions/sound-server). The prebuilt Skia is
+  # not instrumented, and draws on the calling thread alone. Nothing is suppressed (tools/tsan_suppressions.txt). Tree
   # build/ci-tsan; randomisation off as above.
   tsan:
     name: Linux sanitizer (thread)
@@ -263,8 +263,8 @@ jobs:
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
-      - name: A sound card
-        uses: ./.github/actions/sound-card
+      - name: A sound server
+        uses: ./.github/actions/sound-server
       - name: Configure
         run: >
           cmake -S . -B build/ci-tsan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo -DKNECT4_TSAN=ON
