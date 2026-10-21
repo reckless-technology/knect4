@@ -48,8 +48,11 @@ class BoardView final : public reckless::view::View
      */
     static void PaintBoard(reckless::gfx::Canvas &c, const BoardPicture &picture, bool is_play_again_lit = false);
 
-    /** @return Where the banner's "Play again" stands, in the board's design pixels. */
-    static reckless::gfx::RectF PlayAgainArea() noexcept;
+    /**
+     * @param layout The board's layout.
+     * @return Where the banner's "Play again" stands, in the board's design pixels.
+     */
+    static reckless::gfx::RectF PlayAgainArea(const art::Layout &layout) noexcept;
 
     /**
      * @param point A point in the view.

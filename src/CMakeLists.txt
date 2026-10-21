@@ -1,5 +1,5 @@
-# The game: its board, evaluation and search, which nothing else is needed for.
-add_library(knect4_game STATIC game/game.cpp)
+# The game: its board and rules, and the computer's play on every board size, which nothing else is needed for.
+add_library(knect4_game STATIC game/engine.cpp game/game.cpp game/opening_book.cpp)
 target_include_directories(knect4_game PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(knect4_game PRIVATE knect4_warnings)
 

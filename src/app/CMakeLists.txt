@@ -8,6 +8,7 @@ reckless_module_assets(knect4_assets "icon_256.png=${PROJECT_SOURCE_DIR}/assets/
     "licence.txt=${PROJECT_SOURCE_DIR}/LICENSE" "third_party_notices.txt=${PROJECT_SOURCE_DIR}/THIRD-PARTY-NOTICES.txt")
 
 add_library(knect4_gui STATIC
+    about_view.cpp
     board_art.cpp
     board_view.cpp
     click_player.cpp
@@ -15,7 +16,8 @@ add_library(knect4_gui STATIC
     main_view.cpp
     menus.cpp
     settings_file.cpp
-    side_panel.cpp)
+    side_panel.cpp
+    window_sizes.cpp)
 target_include_directories(knect4_gui PUBLIC "${PROJECT_SOURCE_DIR}/src" "${PROJECT_BINARY_DIR}/generated")
 target_link_libraries(knect4_gui
     PUBLIC  knect4_game knect4_effects knect4_assets reckless_app_shell reckless_common_panel reckless_gfx_skia
@@ -72,7 +74,7 @@ endif()
 
 if(KNECT4_BUILD_TESTS)
     # The render tool drawing every state it knows, and the icon, into the build tree: each must write its picture.
-    foreach(state mid drop won lost empty friend friend-won)
+    foreach(state mid drop won lost empty friend friend-won hint emptying marks keys small large supersize about)
         add_test(NAME render_${state} COMMAND knect4_render "${CMAKE_CURRENT_BINARY_DIR}/render_${state}.png" ${state})
     endforeach()
     add_test(NAME render_icon COMMAND knect4_render "${CMAKE_CURRENT_BINARY_DIR}/render_icon.png" icon 64)

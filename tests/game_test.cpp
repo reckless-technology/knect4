@@ -3,12 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <atomic>
-#include <chrono>
-#include <fstream>
-#include <sstream>
 #include <string>
-#include <thread>
 #include <vector>
 
 namespace knect4
@@ -67,32 +62,6 @@ TEST(Game, WritesItselfTopRowFirst)
                                "| | | |O| | | |\n"
                                "| | | |X| | | |\n"
                                "_______________\n");
-}
-
-TEST(Game, ScoresAMoveByItsLinesInFourDirections)
-{
-    Game game;
-    // A lone piece: a line of one each way.
-    EXPECT_EQ(game.EvaluateMove(3, false, kMax), 4 * Game::kScores[1]);
-    game.DoMove(3, kMax);
-    EXPECT_EQ(game.EvaluateMove(3, true, kMax), 4 * Game::kScores[1]);
-    // Beside it: two in a row across.
-    EXPECT_EQ(game.EvaluateMove(4, false, kMax), Game::kScores[2] + 3 * Game::kScores[1]);
-    // On top of it: two in a column.
-    EXPECT_EQ(game.EvaluateMove(3, false, kMax), Game::kScores[2] + 3 * Game::kScores[1]);
-    // The other side's piece there makes no line with it.
-    EXPECT_EQ(game.EvaluateMove(4, false, kMin), 4 * Game::kScores[1]);
-}
-
-TEST(Game, EvaluatesTheBoardFromTheComputersSide)
-{
-    Game game;
-    EXPECT_EQ(game.EvaluateBoard(), 0);
-    game.DoMove(0, kMax);
-    game.DoMove(1, kMax);
-    game.DoMove(6, kMin);
-    // X's best top piece is two across (13 + 3), O's a lone one (4).
-    EXPECT_EQ(game.EvaluateBoard(), 16 - 4);
 }
 
 TEST(Game, FindsFourInEveryDirection)
@@ -166,136 +135,6 @@ TEST(Game, CallsAFullBoardWithNoFourADraw)
     EXPECT_FALSE(game.HasRoom());
     EXPECT_FALSE(game.IsWinningMove(last, player));
     EXPECT_TRUE(game.IsDraw(last, player));
-}
-
-TEST(Game, TakesAWinAndBlocksOne)
-{
-    // X has three across the bottom with the fourth open: X takes it at once.
-    Game win  = Played({0, 0, 1, 1, 2, 2});
-    int  move = -1;
-    EXPECT_GE(win.NextMove(3, kMax, move), Game::kWinningScore);
-    EXPECT_EQ(move, 3);
-
-    // O to move against the same three: it blocks.
-    Game block = Played({0, 6, 1, 6, 2});
-    move       = -1;
-    block.NextMove(3, kMin, move);
-    EXPECT_EQ(move, 3);
-}
-
-TEST(Game, PrunesToTheSameMoveAndScoreAsTheFullSearch)
-{
-    // The original's own check (DoSelfTests): alpha-beta against plain negamax, both sides, through a whole game.
-    Game game;
-    int  player = kMax;
-    for (int ply = 0; ply != 42; ++ply)
-    {
-        int       plain_move  = -1;
-        int       pruned_move = -1;
-        const int plain       = game.Negamax(4, Game::kAlphaInitial, Game::kBetaInitial, false, player, plain_move);
-        const int pruned      = game.Negamax(4, Game::kAlphaInitial, Game::kBetaInitial, true, player, pruned_move);
-        ASSERT_EQ(plain, pruned) << "ply " << ply << "\n" << game.ToString();
-        ASSERT_EQ(plain_move, pruned_move) << "ply " << ply << "\n" << game.ToString();
-        game.DoMove(pruned_move, player);
-        if (game.IsWinningMove(pruned_move, player) || game.IsDraw(pruned_move, player))
-        {
-            break;
-        }
-        player = -player;
-    }
-}
-
-TEST(Game, PlaysAsTheOriginalPlayed)
-{
-    // Self-play recorded from the C# game: every move and score, at depths 1 to 11, from openings of a few moves.
-    std::ifstream file(KNECT4_TEST_DATA "/csharp_self_play.txt");
-    ASSERT_TRUE(file) << "the fixture " KNECT4_TEST_DATA "/csharp_self_play.txt";
-    std::string line;
-    int         games = 0;
-    while (std::getline(file, line))
-    {
-        if (line.empty() || line[0] == '#')
-        {
-            continue;
-        }
-        const std::size_t colon = line.find(':');
-        ASSERT_NE(colon, std::string::npos) << line;
-        std::istringstream head(line.substr(0, colon));
-        int                depth = 0;
-        std::string        opening;
-        head >> depth >> opening;
-        Game game;
-        int  player = kMax;
-        for (const char column : opening)
-        {
-            game.DoMove(column - '0', player);
-            player = -player;
-        }
-        std::istringstream moves(line.substr(colon + 1));
-        std::string        word;
-        std::string        result;
-        while (moves >> word)
-        {
-            const std::size_t slash = word.find('/');
-            if (slash == std::string::npos)
-            {
-                // The recording ended the game here: so must the port, before this word was reached.
-                ADD_FAILURE() << "the recording ends the game with '" << word << "' where the port plays on: " << line;
-                break;
-            }
-            const int expected_move  = std::stoi(word.substr(0, slash));
-            const int expected_score = std::stoi(word.substr(slash + 1));
-            int       move           = -1;
-            const int score          = game.NextMove(depth, player, move);
-            ASSERT_EQ(move, expected_move) << "depth " << depth << " opening '" << opening << "'\n" << game.ToString();
-            ASSERT_EQ(score, expected_score) << "depth " << depth << " opening '" << opening << "'\n"
-                                             << game.ToString();
-            game.DoMove(move, player);
-            const bool is_won   = game.IsWinningMove(move, player);
-            const bool is_drawn = game.IsDraw(move, player);
-            if (is_won || is_drawn)
-            {
-                ASSERT_TRUE(moves >> result);
-                EXPECT_EQ(result, is_drawn ? "D" : (player == kMax ? "X" : "O")) << line;
-                break;
-            }
-            player = -player;
-        }
-        ++games;
-    }
-    EXPECT_EQ(games, 57);
-}
-
-TEST(Game, StopsWhenAsked)
-{
-    Game              game;
-    std::atomic<bool> stop{true};
-    int               move  = -1;
-    const auto        start = std::chrono::steady_clock::now();
-    EXPECT_EQ(game.NextMove(11, kMax, move, &stop), 0);
-    EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(1));
-    EXPECT_EQ(move, -1);
-    // The board is as it was.
-    EXPECT_EQ(game.ToString(), Game().ToString());
-}
-
-TEST(Game, StopsASearchUnderWay)
-{
-    // A search far deeper than any level, stopped from another thread a moment in: it ends at once, the board as it
-    // was.
-    Game              game;
-    std::atomic<bool> stop{false};
-    int               move = -1;
-    std::thread       stopper([&stop] {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        stop.store(true);
-    });
-    const auto        start = std::chrono::steady_clock::now();
-    game.NextMove(30, kMax, move, &stop);
-    const auto took = std::chrono::steady_clock::now() - start;
-    stopper.join();
-    EXPECT_LT(took, std::chrono::seconds(5));
-    EXPECT_EQ(game.ToString(), Game().ToString());
 }
 
 TEST(Game, RefusesMovesTheBoardHasNoRoomFor)

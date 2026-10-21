@@ -38,16 +38,24 @@ inline constexpr Color kBoardMid{0xff2363c4u};
 inline constexpr Color kBoardDark{0xff17479bu};
 inline constexpr Color kStand{0xff163f8au};
 
-/** A puck's colours: its body, the light its raised rim catches and the shade beneath it. */
+/** The symbol a puck carries where marks are shown, so the two sides differ by more than colour. */
+enum class Mark
+{
+    kCross, ///< An upright cross: Red's.
+    kStar,  ///< A five-pointed star: Yellow's.
+};
+
+/** A puck's colours: its body, the light its raised rim catches and the shade beneath it; and its mark. */
 struct PuckColours
 {
     Color body;  ///< The face.
     Color light; ///< Where the light falls.
     Color shade; ///< Where it does not.
+    Mark  mark;  ///< Its symbol.
 };
 
-inline constexpr PuckColours kRed{Color{0xffd8312cu}, Color{0xfff4736bu}, Color{0xff7e1210u}};
-inline constexpr PuckColours kYellow{Color{0xfff3c419u}, Color{0xffffe680u}, Color{0xffa67a00u}};
+inline constexpr PuckColours kRed{Color{0xffd8312cu}, Color{0xfff4736bu}, Color{0xff7e1210u}, Mark::kCross};
+inline constexpr PuckColours kYellow{Color{0xfff3c419u}, Color{0xffffe680u}, Color{0xffa67a00u}, Mark::kStar};
 
 /** @return The window's colours as the toolkit's app shell and its widgets take them. */
 inline reckless::app::Theme Shell()

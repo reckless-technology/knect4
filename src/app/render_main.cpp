@@ -1,7 +1,10 @@
 // The window drawn to a PNG with a game in a chosen state, for review images and the docs: `mid` (a game under way,
 // the person's puck held), `drop` (it falling), `won` (the person's four lit, the banner shown), `lost`, `empty`,
-// `friend` (two people, Yellow to move) and `friend-won` (Yellow's four); and with `icon <size>` the app's icon.
+// `friend` (two people, Yellow to move) and `friend-won` (Yellow's four), `hint` (the hint found), `emptying` (the
+// pucks falling out through the slider), `marks` (the pucks' marks), `keys` (the keyboard's marker), `small`, `large`
+// and `supersize` (the other boards) and `about` (the About card); and with `icon <size>` the app's icon.
 
+#include "app/about_view.h"
 #include "app/board_art.h"
 #include "app/board_view.h"
 #include "app/controller.h"
@@ -11,11 +14,15 @@
 #include "Embedded.h"
 #include "SkiaCanvas.h"
 #include "View.h"
+#include "version.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace
@@ -77,9 +84,10 @@ int RenderIcon(int size, const std::string &path)
         reckless::gfx::Canvas &c = *canvas;
         // Two by two slots of the board, red and yellow crosswise, cut out of a rounded square of its plastic: the
         // slots' block centred, at a scale that leaves the next slots' holes just outside the square.
-        using knect4::app::art::ColumnX;
-        using knect4::app::art::RowY;
-        reckless::gfx::Path square;
+        const knect4::app::art::Layout layout;
+        const auto                     ColumnX = [&layout](float column) { return layout.ColumnX(column); };
+        const auto                     RowY    = [&layout](int row) { return layout.RowY(static_cast<float>(row)); };
+        reckless::gfx::Path            square;
         square.AddRoundedRect({8.0f, 8.0f, 240.0f, 240.0f}, 52.0f);
         c.ClipToPath(square);
         c.FillAll(knect4::app::theme::kWindow);
@@ -96,7 +104,7 @@ int RenderIcon(int size, const std::string &path)
                                    knect4::app::theme::kYellow);
         knect4::app::art::DrawPuck(c, {ColumnX(1.0f), RowY(1)}, knect4::app::art::kPuckRadius,
                                    knect4::app::theme::kRed);
-        knect4::app::art::DrawFrame(c);
+        knect4::app::art::DrawFrame(c, layout);
     }
     return Write(image, path) ? 0 : 1;
 }
@@ -113,7 +121,9 @@ int main(int argc, char **argv)
 {
     if (argc < 2)
     {
-        std::fprintf(stderr, "usage: knect4_render <out.png> [mid|drop|won|lost|empty|friend|friend-won] [scale]\n"
+        std::fprintf(stderr, "usage: knect4_render <out.png> [state] [scale]\n"
+                             "  state: mid drop won lost empty friend friend-won hint emptying marks keys small large\n"
+                             "         supersize about\n"
                              "       knect4_render <out.png> icon <size>\n");
         return 2;
     }
@@ -130,8 +140,67 @@ int main(int argc, char **argv)
     // The person (between two people, Red) starts every game set up here: their pucks are the odd moves.
     knect4::app::Settings settings;
     settings.is_two_player = state == "friend" || state == "friend-won";
+    settings.has_marks     = state == "marks";
+    if (state == "small")
+    {
+        settings.board = {6, 5};
+    }
+    else if (state == "large")
+    {
+        settings.board = {9, 7};
+    }
+    else if (state == "supersize")
+    {
+        settings.board = {16, 8};
+    }
+    if (settings.is_two_player)
+    {
+        settings.red_name    = "Ann";
+        settings.yellow_name = "Sam";
+    }
     knect4::app::Controller controller(nullptr, settings);
-    if (state == "friend")
+    if (state == "small" || state == "large" || state == "supersize")
+    {
+        // A few moves into a game on the board, the person's puck held over the middle.
+        const int middle = settings.board.columns / 2;
+        controller.PlaceMoves({middle, middle, middle - 1, middle + 1, middle + 1, 0});
+        controller.Hover(middle - 1);
+        controller.Frame(0.25);
+    }
+    else if (state == "hint" || state == "marks" || state == "keys")
+    {
+        // The person's turn with a four to make at 3: the hint found and shown, the marks, or the keys' marker.
+        controller.PlaceMoves({0, 6, 1, 6, 2, 5});
+        if (state == "hint")
+        {
+            controller.AskHint();
+            for (int frame = 0; frame != 600 && controller.hint_column() < 0; ++frame)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                controller.Frame(1.0 / 60.0);
+            }
+        }
+        if (state == "keys")
+        {
+            controller.Step(1);
+        }
+        else
+        {
+            controller.Hover(4);
+        }
+        controller.Frame(0.25);
+    }
+    else if (state == "emptying")
+    {
+        // The last game's pucks falling out through the slider.
+        controller.PlaceMoves({3, 3, 2, 4, 4, 2, 5, 1, 3, 3, 1, 0, 6});
+        controller.NewGame();
+        for (int frame = 0; frame != 22; ++frame)
+        {
+            controller.Frame(1.0 / 60.0);
+        }
+    }
+    else if (state == "friend")
     {
         // Two people: Yellow's turn, Yellow's puck held over column 4.
         controller.PlaceMoves({3, 3, 2, 4, 4, 2, 5, 1, 3});
@@ -169,7 +238,9 @@ int main(int argc, char **argv)
     {
         controller.PlaceMoves({0, 3, 0, 3, 1, 3, 6, 3});
     }
-    for (int frame = 0; frame != 240 && controller.phase() == knect4::app::Phase::kDropping && state != "drop"; ++frame)
+    for (int frame = 0;
+         frame != 240 && controller.phase() == knect4::app::Phase::kDropping && state != "drop" && state != "emptying";
+         ++frame)
     {
         controller.Frame(1.0 / 60.0);
     }
@@ -180,6 +251,12 @@ int main(int argc, char **argv)
     view.SetHost(&host);
     view.SetBounds({knect4::app::MainView::kDesignWidth, knect4::app::MainView::kDesignHeight});
     view.Show(controller);
+    std::unique_ptr<knect4::app::AboutView> about;
+    if (state == "about")
+    {
+        about = std::make_unique<knect4::app::AboutView>(knect4::kVersion);
+        view.SetOverlay(about.get());
+    }
 
     const int width  = static_cast<int>(static_cast<float>(knect4::app::MainView::kDesignWidth) * scale + 0.5f);
     const int height = static_cast<int>(static_cast<float>(knect4::app::MainView::kDesignHeight) * scale + 0.5f);

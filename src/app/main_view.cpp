@@ -28,6 +28,21 @@ void MainView::SetMenuBarView(std::unique_ptr<reckless::app::MenuBarView> bar)
     Resized();
 }
 
+void MainView::SetOverlay(reckless::view::View *overlay)
+{
+    if (overlay_ != nullptr && overlay_ != overlay)
+    {
+        RemoveChild(*overlay_);
+    }
+    overlay_ = overlay;
+    if (overlay_ != nullptr)
+    {
+        AddChild(*overlay_);
+        overlay_->SetBounds(LocalBounds());
+    }
+    Repaint();
+}
+
 void MainView::Show(const Controller &controller)
 {
     board_.SetPicture(controller.Picture());
@@ -50,6 +65,10 @@ void MainView::Paint(reckless::gfx::Canvas &c)
 
 void MainView::Resized()
 {
+    if (overlay_ != nullptr)
+    {
+        overlay_->SetBounds(LocalBounds());
+    }
     int top = 0;
     if (menu_bar_)
     {

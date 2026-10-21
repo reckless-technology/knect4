@@ -162,3 +162,7 @@ if(KNECT4_BUILD_TESTS AND KNECT4_GUI)
                         "is left out")
     endif()
 endif()
+
+# The opening book's generator (tools/make_book.cpp): run by hand to write src/game/opening_book_data.inc.
+add_executable(knect4_make_book EXCLUDE_FROM_ALL tools/make_book.cpp)
+target_link_libraries(knect4_make_book PRIVATE knect4_game knect4_warnings)

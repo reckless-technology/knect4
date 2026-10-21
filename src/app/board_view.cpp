@@ -47,19 +47,21 @@ void BoardView::SetPicture(BoardPicture picture)
     Repaint();
 }
 
-RectF BoardView::PlayAgainArea() noexcept
+RectF BoardView::PlayAgainArea(const art::Layout &layout) noexcept
 {
-    return RectF{art::kBanner.right() - 172.0f, art::kBanner.CentreY() - 22.0f, 156.0f, 44.0f};
+    const RectF banner = layout.Banner();
+    return RectF{banner.right() - 172.0f, banner.CentreY() - 22.0f, 156.0f, 44.0f};
 }
 
 reckless::gfx::Affine BoardView::BoardTransform() const noexcept
 {
-    const float available_width  = std::max(static_cast<float>(width()), 1.0f);
-    const float available_height = std::max(static_cast<float>(height()), 1.0f);
-    const float scale            = std::min(available_width / (art::kDesignWidth + 2.0f * kRoom),
-                                            available_height / (art::kDesignHeight + 2.0f * kRoom));
-    const float left             = (available_width - art::kDesignWidth * scale) / 2.0f;
-    const float top              = (available_height - art::kDesignHeight * scale) / 2.0f;
+    const float        available_width  = std::max(static_cast<float>(width()), 1.0f);
+    const float        available_height = std::max(static_cast<float>(height()), 1.0f);
+    const art::Layout &layout           = picture_.layout;
+    const float        scale            = std::min(available_width / (layout.DesignWidth() + 2.0f * kRoom),
+                                                   available_height / (layout.DesignHeight() + 2.0f * kRoom));
+    const float        left             = (available_width - layout.DesignWidth() * scale) / 2.0f;
+    const float        top              = (available_height - layout.DesignHeight() * scale) / 2.0f;
     return reckless::gfx::Affine::Scale(scale).Translated(left, top);
 }
 
@@ -81,18 +83,21 @@ void BoardView::Paint(reckless::gfx::Canvas &c)
 
 void BoardView::PaintBoard(reckless::gfx::Canvas &c, const BoardPicture &picture, bool is_play_again_lit)
 {
-    art::DrawTableShadow(c);
+    const art::Layout &layout = picture.layout;
+    const auto         slot   = [&layout](int column, float row) {
+        return PointF{layout.ColumnX(static_cast<float>(column)), layout.RowY(row)};
+    };
+    art::DrawTableShadow(c, layout);
 
-    // Behind the frame: the pucks at rest, and the one falling.
-    for (int column = 0; column != art::kColumns; ++column)
+    // Behind the frame: the pucks at rest, the one falling, and those let out through the slider.
+    for (int column = 0; column != layout.columns(); ++column)
     {
-        for (int row = 0; row != art::kRows; ++row)
+        for (int row = 0; row != layout.rows(); ++row)
         {
-            const int piece = picture.pieces[static_cast<std::size_t>(column)][static_cast<std::size_t>(row)];
-            if (piece != kEmpty)
+            if (const int piece = picture.At(column, row); piece != kEmpty)
             {
-                art::DrawPuck(c, {art::ColumnX(static_cast<float>(column)), art::RowY(row)}, art::kPuckRadius,
-                              ColoursOf(picture, piece));
+                art::DrawPuck(c, slot(column, static_cast<float>(row)), art::kPuckRadius, ColoursOf(picture, piece),
+                              picture.has_marks);
             }
         }
     }
@@ -100,44 +105,69 @@ void BoardView::PaintBoard(reckless::gfx::Canvas &c, const BoardPicture &picture
     {
         const FallingPuck &falling = *picture.falling;
         const float        y       = art::kHoverY + static_cast<float>(falling.drop) * art::kPitch;
-        art::DrawPuck(c, {art::ColumnX(static_cast<float>(falling.column)), y}, art::kPuckRadius,
-                      ColoursOf(picture, falling.player));
+        art::DrawPuck(c, {layout.ColumnX(static_cast<float>(falling.column)), y}, art::kPuckRadius,
+                      ColoursOf(picture, falling.player), picture.has_marks);
+    }
+    for (const EmptyingPuck &puck : picture.emptying)
+    {
+        c.BeginTransparencyLayer(std::clamp(puck.opacity, 0.0f, 1.0f));
+        art::DrawPuck(c, slot(puck.column, puck.row), art::kPuckRadius, ColoursOf(picture, puck.player),
+                      picture.has_marks);
+        c.EndTransparencyLayer();
     }
 
-    art::DrawFrame(c);
-    art::DrawStand(c);
+    art::DrawFrame(c, layout, picture.slide);
+    art::DrawStand(c, layout);
 
-    // In front: the winning line's glow, where the held puck would land, and the held puck.
+    // In front: the winning line's glow, the hint, where the held puck would land, and the held puck.
     if (!picture.winning.empty())
     {
         const float strength = 0.45f + 0.55f * std::clamp(picture.glow, 0.0f, 1.0f);
         for (const Cell &cell : picture.winning)
         {
-            const PointF centre{art::ColumnX(static_cast<float>(cell.column)), art::RowY(cell.row)};
+            const PointF centre = slot(cell.column, static_cast<float>(cell.row));
             art::DrawSlotRing(c, centre, theme::kAmber.WithAlpha(0.35f * strength), 9.0f);
             art::DrawSlotRing(c, centre, theme::kAmber.WithAlpha(strength), 3.5f);
+        }
+    }
+    const auto landing_row = [&picture, &layout](int column) {
+        int row = 0;
+        while (row < layout.rows() && picture.At(column, row) != kEmpty)
+        {
+            ++row;
+        }
+        return row;
+    };
+    if (picture.hint_column >= 0 && picture.hint_column < layout.columns())
+    {
+        if (const int row = landing_row(picture.hint_column); row < layout.rows())
+        {
+            const PointF centre = slot(picture.hint_column, static_cast<float>(row));
+            art::DrawSlotRing(c, centre, theme::kAmber.WithAlpha(0.3f), 10.0f);
+            art::DrawSlotRing(c, centre, theme::kAmber, 3.0f);
         }
     }
     if (picture.held)
     {
         const HeldPuck &held    = *picture.held;
         const float     opacity = std::clamp(held.opacity, 0.0f, 1.0f);
-        if (held.landing_column >= 0 && held.landing_column < art::kColumns)
+        if (held.landing_column >= 0 && held.landing_column < layout.columns())
         {
-            const auto &column = picture.pieces[static_cast<std::size_t>(held.landing_column)];
-            const auto  row    = std::find(column.begin(), column.end(), kEmpty) - column.begin();
-            if (row < art::kRows)
+            if (const int row = landing_row(held.landing_column); row < layout.rows())
             {
-                art::DrawSlotRing(
-                    c, {art::ColumnX(static_cast<float>(held.landing_column)), art::RowY(static_cast<int>(row))},
-                    ColoursOf(picture, held.player).light.WithAlpha(0.55f * opacity), 3.0f);
+                art::DrawSlotRing(c, slot(held.landing_column, static_cast<float>(row)),
+                                  ColoursOf(picture, held.player).light.WithAlpha(0.55f * opacity), 3.0f);
+            }
+            if (held.is_keyboard)
+            {
+                art::DrawKeyboardMarker(c, layout, held.landing_column);
             }
         }
         if (opacity > 0.0f)
         {
             c.BeginTransparencyLayer(opacity);
-            art::DrawPuck(c, {art::ColumnX(held.column), art::kHoverY}, art::kPuckRadius,
-                          ColoursOf(picture, held.player));
+            art::DrawPuck(c, {layout.ColumnX(held.column), art::kHoverY}, art::kPuckRadius,
+                          ColoursOf(picture, held.player), picture.has_marks);
             c.EndTransparencyLayer();
         }
     }
@@ -145,18 +175,17 @@ void BoardView::PaintBoard(reckless::gfx::Canvas &c, const BoardPicture &picture
     // The game's end, over the board where the held puck hung.
     if (!picture.banner.empty())
     {
+        const RectF banner = layout.Banner();
         c.SetColor(theme::kPanel.WithAlpha(0.94f));
-        c.FillRoundedRect(art::kBanner, 12.0f);
+        c.FillRoundedRect(banner, 12.0f);
         c.SetColor(theme::kRule);
-        c.DrawRoundedRect(art::kBanner.Reduced(0.5f), 12.0f, 1.0f);
+        c.DrawRoundedRect(banner.Reduced(0.5f), 12.0f, 1.0f);
         c.SetFont(fonts::Headline());
         c.SetColor(picture.banner_colour);
-        c.DrawText(
-            picture.banner,
-            RectF{art::kBanner.x() + 26.0f, art::kBanner.y(), art::kBanner.width() - 220.0f, art::kBanner.height()},
-            reckless::gfx::Justify::kCentredLeft, true);
+        c.DrawText(picture.banner, RectF{banner.x() + 26.0f, banner.y(), banner.width() - 220.0f, banner.height()},
+                   reckless::gfx::Justify::kCentredLeft, true);
         // The plate painted as a button paints it, at its own origin.
-        const RectF                      area = PlayAgainArea();
+        const RectF                      area = PlayAgainArea(layout);
         const reckless::gfx::ScopedState plate_state(c);
         c.AddTransform(reckless::gfx::Affine::Translation(area.x(), area.y()));
         theme::PlatePainter()(
@@ -168,14 +197,14 @@ void BoardView::PaintBoard(reckless::gfx::Canvas &c, const BoardPicture &picture
 void BoardView::Track(PointF point)
 {
     const PointF board  = ToBoard(point);
-    const bool   is_lit = !picture_.banner.empty() && PlayAgainArea().Contains(board);
+    const bool   is_lit = !picture_.banner.empty() && PlayAgainArea(picture_.layout).Contains(board);
     if (is_lit != is_play_again_lit_)
     {
         is_play_again_lit_ = is_lit;
         Repaint();
     }
-    const bool is_over_board = board.y >= 0.0f && board.y <= art::kFrameTop + art::kFrameHeight;
-    const int  column        = is_over_board ? art::ColumnAt(board.x) : -1;
+    const bool is_over_board = board.y >= 0.0f && board.y <= picture_.layout.FrameBottom();
+    const int  column        = is_over_board ? picture_.layout.ColumnAt(board.x) : -1;
     // Every move over the board is told, not only a change of column: the keys may have moved the held puck since, and
     // the pointer moving takes it back to where the pointer is, so a click drops where the puck is seen.
     if (column >= 0 || column != column_under_pointer_)
@@ -275,7 +304,9 @@ bool BoardView::KeyPressed(const reckless::view::KeyEvent &key)
         }
         return true;
     case Key::kCharacter:
-        if (key.character >= U'1' && key.character < U'1' + static_cast<char32_t>(art::kColumns))
+        // 1 to 9 drop into the first nine columns; a wider board's others are reached with the arrows.
+        if (key.character >= U'1' && key.character <= U'9' &&
+            key.character < U'1' + static_cast<char32_t>(picture_.layout.columns()))
         {
             if (on_drop)
             {
