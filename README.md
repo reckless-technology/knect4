@@ -84,7 +84,8 @@ cmake --build --preset release
 `xvfb-run -a ctest --preset release -L window` gives it where there is none. The `sanitize` preset builds everything
 under AddressSanitizer and UndefinedBehaviorSanitizer, the `tsan` preset under ThreadSanitizer (gcc or clang, Linux or
 macOS); each has a build and a test preset of the same name. The `sanitize` test preset leaves out the leaks of the
-system's PipeWire ALSA plugin, which the audio suite reaches through RtAudio (`tools/lsan_suppressions.txt`).
+system's PipeWire ALSA plugin, which the audio suite reaches through RtAudio (`tools/lsan_suppressions.txt`), and the
+`tsan` test preset the race RtAudio's ALSA back end has on its own stream's state (`tools/tsan_suppressions.txt`).
 
 ### Building on macOS
 

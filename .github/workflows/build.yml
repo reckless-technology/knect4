@@ -262,14 +262,15 @@ jobs:
 
   # Every suite under ThreadSanitizer (the tsan preset's options), its own build since it cannot share a process with
   # AddressSanitizer: the click mixer between the window's thread and the audio thread, the computer's search on a thread
-  # of its own. The prebuilt Skia is not instrumented, and draws on the calling thread alone. Kept tree build/ci-tsan;
-  # randomisation off as above.
+  # of its own. The prebuilt Skia is not instrumented, and draws on the calling thread alone; RtAudio's ALSA back end's
+  # own race on its stream's state is suppressed (tools/tsan_suppressions.txt). Kept tree build/ci-tsan; randomisation
+  # off as above.
   tsan:
     name: Linux sanitizer (thread)
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 90
     env:
-      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/tools/tsan_suppressions.txt
     steps:
       - uses: actions/checkout@v5
         with:

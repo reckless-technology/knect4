@@ -1,0 +1,10 @@
+# ThreadSanitizer's suppressions for the tsan build (TSAN_OPTIONS=suppressions=<this file>; the tsan test preset and
+# build.yml's ThreadSanitizer job set it). Each is race_top, matched against the racing access's own function alone,
+# so a race in code it calls - the game's audio callback among it - is still reported.
+#
+# RtAudio 6.0.1's ALSA back end: RtApiAlsa::probeDeviceOpen starts the stream's thread, whose callbackEvent reads
+# stream_.state without the stream's mutex while RtApi::openStream, on the opening thread, goes on to write it
+# (STREAM_STOPPED); stopStream, abortStream and closeStream write it outside the mutex as well. The unlocked reads only
+# decide whether the thread waits on its condition variable, under the mutex, or leaves. RtAudio's to fix (the toolkit
+# fetches it, external/reckless-toolkit/CMakeLists.txt, and patches it as it is unpacked).
+race_top:RtApiAlsa::callbackEvent
