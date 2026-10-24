@@ -76,14 +76,15 @@ landing louder the further the puck fell; where no output opens, the game plays 
 
 ## Building
 
-The window is built on reckless-toolkit, a private git submodule at `external/reckless-toolkit`; `-DKNECT4_GUI=OFF`
-builds the game and its suites alone, with no submodule (see Licence).
+The window is built on reckless-toolkit, free software under the GPL, whose files are a git subtree in this
+repository at `external/reckless-toolkit` - committed here, so a clone has them and every commit builds on
+its own. `tools/toolkit-pull.sh` brings its head in; it is pulled, never edited here. `-DKNECT4_GUI=OFF`
+builds the game and its suites alone, without it.
 
 On Windows, in Visual Studio's developer environment (`VsDevCmd.bat -arch=x64 -host_arch=x64 -no_logo`), with CMake and
 Ninja:
 
 ```
-git submodule update --init                      # the toolkit, external/reckless-toolkit (private)
 cmake --preset release && cmake --build --preset release && ctest --preset release
 build/release/src/app/Knect4.exe
 ```
@@ -97,7 +98,7 @@ On Debian, Ubuntu or Mint, with gcc:
 
 ```
 sudo apt install build-essential cmake ninja-build pkg-config git libfreetype-dev libfontconfig1-dev libx11-dev libasound2-dev
-git clone --recurse-submodules git@github.com:reckless-technology/knect4.git
+git clone git@github.com:reckless-technology/knect4.git
 cd knect4
 cmake --preset release
 cmake --build --preset release
@@ -116,7 +117,7 @@ system's PipeWire ALSA plugin, which the audio suite reaches through RtAudio (`t
 With Xcode's command-line tools (`xcode-select --install`) and Homebrew's CMake and Ninja (`brew install cmake ninja`):
 
 ```
-git clone --recurse-submodules git@github.com:reckless-technology/knect4.git
+git clone git@github.com:reckless-technology/knect4.git
 cd knect4
 cmake --preset release-universal
 cmake --build --preset release-universal
@@ -138,7 +139,7 @@ The `release-universal` preset builds one binary for Apple silicon and Intel; ev
   `assets/icon/` (Pillow); the build takes them from there and needs no Python.
 - `python3 tools/third_party_notices.py build/release` writes `THIRD-PARTY-NOTICES.txt` from the build tree's fetches and
   the toolkit's pins (any Python 3, nothing installed); the CTest `notices` runs it with `--check` and fails when the
-  committed file is not what it writes. Run it when the submodule moves, and read the diff.
+  committed file is not what it writes. Run it when the toolkit moves, and read the diff.
 - C++ is formatted with clang-format 22.1.8 (`.clang-format`), which the pre-commit hook and CI check. In a fresh clone:
   `git config core.hooksPath .githooks`.
 
@@ -194,7 +195,7 @@ builds as 0.0.0, with a warning.
   lines of `src/` (gcovr 8.3; the report kept as `knect4-coverage`); another job checks the formatting.
 
 The artifacts are kept for 30 days. A newer push to a pull request cancels its older run; every commit on `main` keeps
-its own. The toolkit submodule is read through its read-only deploy key, the secret `RECKLESS_TOOLKIT_DEPLOY_KEY`.
+its own. The toolkit needs no checkout of its own and no key: its files are in this repository.
 
 ## Releases
 
@@ -217,7 +218,7 @@ toolkit's `tools/sign-mac.sh`, when `MACOS_DEVELOPER_ID_APPLICATION_P12` is set)
 Knect 4's own code is under the GNU General Public License version 3 or later (`LICENSE`), copyright 2014-2026
 Jonny Reckless, who holds every line of it and so licenses it as he chooses. Its window builds on reckless-toolkit,
 which is Jonny's too: the game core - its rules, search and the drop's feel - builds and tests with
-`-DKNECT4_GUI=OFF`, which needs no submodule. The third-party parts the
+`-DKNECT4_GUI=OFF`, which leaves the toolkit out. The third-party parts the
 executable contains (Skia with libpng, zlib and, on Linux, FreeType; RtAudio and RtMidi; Noto Serif) are listed with
 their licences in `THIRD-PARTY-NOTICES.txt`, which every package installs and the executable carries.
 
