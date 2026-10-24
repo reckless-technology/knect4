@@ -54,7 +54,7 @@ Source: https://recklesstechnology.com
 
 Files: *
 Copyright: 2014-2026 Jonny Reckless
-License: MIT
+License: GPL-3.0-or-later
  The text is /usr/share/doc/knect4/LICENSE.txt. The third-party parts the game contains are used under the licences
  /usr/share/doc/knect4/THIRD-PARTY-NOTICES.txt reproduces.
 COPYRIGHT

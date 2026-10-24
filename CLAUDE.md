@@ -4,7 +4,8 @@ Guidance for Claude Code in this repository. The README is the long-form referen
 
 Knect 4, against the computer or between two people at one board, C++20, its window on reckless-toolkit (a private submodule at
 `external/reckless-toolkit`, added with its GUI and its audio device layer on, its suites and ASIO off). A private
-repository; the game's own code is MIT-licensed (`LICENSE`), Jonny Reckless's, while the toolkit is proprietary, so
+repository; the game's own code is under the GNU General Public License version 3 or later (`LICENSE`), Jonny
+Reckless's, so
 outsiders can build the game core with `-DKNECT4_GUI=OFF` but not the window.
 
 ## Layout

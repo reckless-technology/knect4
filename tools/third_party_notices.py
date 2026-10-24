@@ -228,7 +228,8 @@ def build(build_dir):
         title, used = sections[key][0], sections[key][1]
         rows.append(f"  {n[key]:>2}. {title.split(',')[0]:<44} {used}")
     head = ("THIRD-PARTY NOTICES\n\n" + prose(
-        "Knect 4 is copyright (C) 2014-2026 Jonny Reckless and licensed under the MIT licence (LICENSE). Its "
+        "Knect 4 is copyright (C) 2014-2026 Jonny Reckless and licensed under the GNU General Public License "
+        "version 3 or later (LICENSE). Its "
         "executable contains the third-party software below, each part used under its own licence, which this file "
         "reproduces wherever the licence asks for it.") +
         "\n\nWhere each part is used\n\n" + "\n".join(rows) + "\n")

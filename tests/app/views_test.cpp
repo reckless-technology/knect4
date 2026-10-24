@@ -448,10 +448,10 @@ namespace
 
 TEST_F(Views, ShowsTheAboutCardAndClosesIt)
 {
-    AboutView about("2.0.0", "The MIT licence's text.", "Skia's notice.");
+    AboutView about("2.0.0", "The GPLv3 licence's text.", "Skia's notice.");
     about.SetHost(&host_);
     about.SetBounds({0, 0, MainView::kDesignWidth, MainView::kDesignHeight});
-    EXPECT_NE(about.text().find("MIT licence"), std::string::npos);
+    EXPECT_NE(about.text().find("GPLv3"), std::string::npos);
     EXPECT_NE(about.text().find("Skia"), std::string::npos);
     EXPECT_FALSE(Painted(about).empty());
     int closes     = 0;
