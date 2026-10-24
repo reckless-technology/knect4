@@ -16,6 +16,7 @@
 #include "View.h"
 #include "version.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -66,14 +67,27 @@ bool Write(const reckless::gfx::Image &image, const std::string &path)
     return static_cast<bool>(file);
 }
 
+/// The pucks the icon's board holds: the column, the row counted from the bottom, and whose puck it is.
+struct IconPuck
+{
+    int                                    column;  ///< The column, 0 at the left.
+    int                                    row;     ///< The row, 0 at the bottom.
+    const knect4::app::theme::PuckColours *colours; ///< Red's or Yellow's.
+};
+
 /**
- * The icon: the board's lower left corner, a red puck in its slot and a yellow one beside it, on a rounded square.
+ * The icon: a whole five by four board part way through a game, a red puck held over the middle column ready to drop,
+ * on a rounded square of the window's colour. Drawn by the board's own art at whatever size is asked for, so every
+ * size the platforms take is drawn rather than scaled from one picture.
  * @param size Its side, in pixels.
  * @param path Where to write it.
  * @return The exit code.
  */
 int RenderIcon(int size, const std::string &path)
 {
+    namespace art   = knect4::app::art;
+    namespace theme = knect4::app::theme;
+
     reckless::gfx::Image image = reckless::gfx::MakeImage(size, size);
     {
         const auto canvas = reckless::gfx::MakeImageCanvas(image, static_cast<float>(size) / 256.0f);
@@ -82,29 +96,42 @@ int RenderIcon(int size, const std::string &path)
             return 1;
         }
         reckless::gfx::Canvas &c = *canvas;
-        // Two by two slots of the board, red and yellow crosswise, cut out of a rounded square of its plastic: the
-        // slots' block centred, at a scale that leaves the next slots' holes just outside the square.
-        const knect4::app::art::Layout layout;
-        const auto                     ColumnX = [&layout](float column) { return layout.ColumnX(column); };
-        const auto                     RowY    = [&layout](int row) { return layout.RowY(static_cast<float>(row)); };
-        reckless::gfx::Path            square;
+        reckless::gfx::Path    square;
         square.AddRoundedRect({8.0f, 8.0f, 240.0f, 240.0f}, 52.0f);
         c.ClipToPath(square);
-        c.FillAll(knect4::app::theme::kWindow);
-        const float centre_x = ColumnX(0.5f);
-        const float centre_y = (RowY(0) + RowY(1)) / 2.0f;
+        c.FillAll(theme::kWindow);
+
+        // The board and the puck about to drop into it, fitted to the square: the puck rests on the frame's top edge
+        // rather than at the height the board view holds it, which leaves room above for the banner the icon has no
+        // use for. From the top of that puck down to the frame's bottom edge, centred on the frame, at the scale that
+        // leaves a margin of the window's colour all round.
+        const art::Layout layout(5, 4);
+        const float       held_y         = art::kFrameTop - art::kPuckRadius + 8.0f;
+        const float       held_top       = held_y - art::kPuckRadius;
+        const float       content_height = layout.FrameBottom() - held_top;
+        const float       content_width  = layout.FrameWidth();
+        const float       scale          = 224.0f / std::max(content_width, content_height);
+        const float       centre_x       = layout.Frame().CentreX();
+        const float       centre_y       = (held_top + layout.FrameBottom()) / 2.0f;
         c.AddTransform(reckless::gfx::Affine::Translation(-centre_x, -centre_y)
-                           .FollowedBy(reckless::gfx::Affine::Scale(1.4f))
+                           .FollowedBy(reckless::gfx::Affine::Scale(scale))
                            .Translated(128.0f, 128.0f));
-        knect4::app::art::DrawPuck(c, {ColumnX(0.0f), RowY(0)}, knect4::app::art::kPuckRadius,
-                                   knect4::app::theme::kRed);
-        knect4::app::art::DrawPuck(c, {ColumnX(1.0f), RowY(0)}, knect4::app::art::kPuckRadius,
-                                   knect4::app::theme::kYellow);
-        knect4::app::art::DrawPuck(c, {ColumnX(0.0f), RowY(1)}, knect4::app::art::kPuckRadius,
-                                   knect4::app::theme::kYellow);
-        knect4::app::art::DrawPuck(c, {ColumnX(1.0f), RowY(1)}, knect4::app::art::kPuckRadius,
-                                   knect4::app::theme::kRed);
-        knect4::app::art::DrawFrame(c, layout);
+
+        // A position Red is to play into: each side has four pucks down, and every one of them is supported.
+        static constexpr IconPuck kPucks[] = {
+            {1, 0, &theme::kYellow}, {2, 0, &theme::kRed}, {3, 0, &theme::kYellow}, {1, 1, &theme::kRed},
+            {2, 1, &theme::kYellow}, {3, 1, &theme::kRed}, {2, 2, &theme::kRed},    {3, 2, &theme::kYellow},
+        };
+        for (const IconPuck &puck : kPucks)
+        {
+            art::DrawPuck(c,
+                          {layout.ColumnX(static_cast<float>(puck.column)), layout.RowY(static_cast<float>(puck.row))},
+                          art::kPuckRadius, *puck.colours);
+        }
+        // The puck about to drop, then the frame over the lot, so the frame's top rail cuts across the foot of that
+        // puck as it does across a puck standing in a slot.
+        art::DrawPuck(c, {layout.ColumnX(2.0f), held_y}, art::kPuckRadius, theme::kRed);
+        art::DrawFrame(c, layout);
     }
     return Write(image, path) ? 0 : 1;
 }
