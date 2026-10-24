@@ -8,7 +8,8 @@ name: build
 # again under AddressSanitizer and UndefinedBehaviorSanitizer, and under ThreadSanitizer; and the C++ held to
 # clang-format 22.1.8. The repository is public, so every job runs on GitHub's hosted images (ubuntu-24.04,
 # windows-2025, macos-15), a fresh machine each job (.github/actions/cpp provides the toolchain). The window is built
-# on the toolkit, a private submodule read through its read-only deploy key (.github/actions/toolkit). Every checkout
+# on the toolkit, whose files are a git subtree in this repository (external/reckless-toolkit), so a checkout has
+# them and no job fetches anything of its own. Every checkout
 # is whole (fetch-depth 0): the version every binary reports is MAJOR.MINOR.BUILD from the nearest vMAJOR.MINOR tag
 # (cmake/knect4_version.cmake), which a shallow clone cuts off.
 on:
@@ -41,11 +42,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: The toolkit submodule
-        uses: ./.github/actions/toolkit
-        with:
-          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
-          require-on-main: "true"
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -97,10 +93,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: The toolkit submodule
-        uses: ./.github/actions/toolkit
-        with:
-          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -143,10 +135,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: The toolkit submodule
-        uses: ./.github/actions/toolkit
-        with:
-          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -219,10 +207,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: The toolkit submodule
-        uses: ./.github/actions/toolkit
-        with:
-          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -256,10 +240,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: The toolkit submodule
-        uses: ./.github/actions/toolkit
-        with:
-          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -290,10 +270,6 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: The toolkit submodule
-        uses: ./.github/actions/toolkit
-        with:
-          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp

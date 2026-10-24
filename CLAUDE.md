@@ -2,7 +2,7 @@
 
 Guidance for Claude Code in this repository. The README is the long-form reference: the game, the feel, building, CI.
 
-Knect 4, against the computer or between two people at one board, C++20, its window on reckless-toolkit (a private submodule at
+Knect 4, against the computer or between two people at one board, C++20, its window on reckless-toolkit (a git subtree at
 `external/reckless-toolkit`, added with its GUI and its audio device layer on, its suites and ASIO off). A private
 repository; the game's own code is under the GNU General Public License version 3 or later (`LICENSE`), Jonny
 Reckless's, so
@@ -32,7 +32,7 @@ outsiders can build the game core with `-DKNECT4_GUI=OFF` but not the window.
   on the toolkit's offline audio API, window sizes), the render tool's runs and the window's launch (`app_smoke`).
 - `THIRD-PARTY-NOTICES.txt`: written by `tools/third_party_notices.py <build-dir>` from the build's fetches and the
   toolkit's pins (CTest `notices` checks it); the executable carries it and `LICENSE` as the embedded files
-  `third_party_notices.txt` and `licence.txt`. Write it again when the submodule moves.
+  `third_party_notices.txt` and `licence.txt`. Write it again when the toolkit moves.
 - `packaging/`: `stage.py`, then the Windows installer (Inno Setup), the macOS package with its uninstaller and the
   Linux Debian package and tarball, each with a test script; `build.yml` makes them all unsigned on every pull request,
   `release.yml` (a pushed `vMAJOR.MINOR`, or by hand with `dry_run`) builds them from nothing, signs where the secrets
@@ -53,7 +53,9 @@ outsiders can build the game core with `-DKNECT4_GUI=OFF` but not the window.
 - CI runs on GitHub's hosted runners (the repository is public; `ubuntu-24.04`, `windows-2025`, `macos-15`): Windows,
   Linux (release with the window under `xvfb-run`, coverage, AddressSanitizer with UndefinedBehaviorSanitizer,
   ThreadSanitizer) and macOS universal.
-- The game is a consumer of the toolkit: a bump of the submodule points at a commit on the toolkit's `main` (CI checks).
+- The game is a consumer of the toolkit, whose files are a subtree here: `tools/toolkit-pull.sh` brings its head in,
+  and it is pulled, never edited in this repository - an edit here would be invisible to the toolkit and to the
+  three other products that share it.
 - Line coverage of `src/` stays at 95 % or more (CI's coverage job, gcc and gcovr on Linux; `tools/coverage-windows.ps1`
   on a Windows desk with clang-cl, which the Windows runners lack): every new behaviour gets a test; the views are
   driven by events and painted into images in `tests/app/views_test.cpp`, the audio output through the toolkit's

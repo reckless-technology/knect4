@@ -144,10 +144,6 @@ jobs:
           fetch-depth: 0
       - name: Start from nothing
         run: rm -rf build/release-ci build/release-dist build/release-out
-      - name: The toolkit submodule
-        uses: ./.github/actions/toolkit
-        with:
-          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -213,10 +209,6 @@ jobs:
       - name: Start from nothing
         shell: pwsh
         run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build/release-ci, build/release-dist, build/release-out
-      - name: The toolkit submodule
-        uses: ./.github/actions/toolkit
-        with:
-          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
@@ -339,10 +331,6 @@ jobs:
           fetch-depth: 0
       - name: Start from nothing
         run: rm -rf build/release-ci build/release-dist build/release-out
-      - name: The toolkit submodule
-        uses: ./.github/actions/toolkit
-        with:
-          deploy-key: ${{ secrets.RECKLESS_TOOLKIT_DEPLOY_KEY }}
       - name: Toolchain
         id: cpp
         uses: ./.github/actions/cpp
