@@ -214,9 +214,10 @@ toolkit's `tools/sign-mac.sh`, when `MACOS_DEVELOPER_ID_APPLICATION_P12` is set)
 
 ## Licence
 
-Knect 4's own code is under the MIT licence (`LICENSE`), copyright 2014-2026 Jonny Reckless. Its window builds on
-reckless-toolkit, which is proprietary and private: anyone can build and test the game - its rules, search and the
-drop's feel - with `-DKNECT4_GUI=OFF`, which needs no submodule, but not the window. The third-party parts the
+Knect 4's own code is under the GNU General Public License version 3 or later (`LICENSE`), copyright 2014-2026
+Jonny Reckless, who holds every line of it and so licenses it as he chooses. Its window builds on reckless-toolkit,
+which is Jonny's too: the game core - its rules, search and the drop's feel - builds and tests with
+`-DKNECT4_GUI=OFF`, which needs no submodule. The third-party parts the
 executable contains (Skia with libpng, zlib and, on Linux, FreeType; RtAudio and RtMidi; Noto Serif) are listed with
 their licences in `THIRD-PARTY-NOTICES.txt`, which every package installs and the executable carries.
 

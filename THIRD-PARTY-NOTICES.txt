@@ -1,8 +1,8 @@
 THIRD-PARTY NOTICES
 
-Knect 4 is copyright (C) 2014-2026 Jonny Reckless and licensed under the MIT licence (LICENSE). Its
-executable contains the third-party software below, each part used under its own licence, which this
-file reproduces wherever the licence asks for it.
+Knect 4 is copyright (C) 2014-2026 Jonny Reckless and licensed under the GNU General Public License
+version 3 or later (LICENSE). Its executable contains the third-party software below, each part used
+under its own licence, which this file reproduces wherever the licence asks for it.
 
 Where each part is used
 
