@@ -15,10 +15,12 @@
 #include "AppPlatform.h"
 #include "AppRoot.h"
 #include "AppRun.h"
+#include "AppUpdates.h"
 #include "Embedded.h"
 #include "SkiaCanvas.h"
 #include "Window.h"
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <optional>
@@ -73,6 +75,17 @@ int main(int argc, char **argv)
         view.SetOverlay(about.get());
         about->GrabKeyboardFocus();
     };
+    // The update check, as every product on the toolkit runs it: once a day at most while the window shows, never in
+    // a launch's check, and none where RECKLESS_UPDATE_CHECK=off (every CI runner), when the Help menu offers no
+    // Updates at all rather than one that can only say it has not checked.
+    std::unique_ptr<reckless::update::Checker> updates;
+    if (!options.is_smoke)
+    {
+        const reckless::update::Product product{
+            "Knect4", knect4::kVersion, "https://recklesstechnology.com/updates/knect4.json", "knect4-updates.json"};
+        updates = reckless::app::MakeUpdateChecker(product);
+    }
+
     knect4::app::CommandHandlers handlers;
     handlers.quit        = [&platform] { platform->CallSoon([&platform] { platform->Quit(); }); };
     handlers.about       = show_about;
@@ -83,15 +96,28 @@ int main(int argc, char **argv)
         }
     };
 
-    // Whenever the choices, the scores or what the menu can do change: kept, and the menu bar set again.
+    // Whenever the choices, the scores or what the menu can do change: kept, and the menu bar set again. The update
+    // check's revision counts too, since the Updates rows say what it last said.
     std::optional<knect4::app::MenuState> menu_state;
-    const auto                            follow = [&] {
+    std::uint64_t                         updates_shown = 0;
+    const auto                            follow        = [&] {
         keeper.Changed({controller.settings(), controller.scores()});
-        const knect4::app::MenuState now = knect4::app::MenuStateOf(controller, sizes.Menu());
-        if (menu_state != now)
+        const knect4::app::MenuState now      = knect4::app::MenuStateOf(controller, sizes.Menu());
+        const std::uint64_t          revision = updates ? updates->revision() : 0;
+        if (menu_state != now || updates_shown != revision)
         {
-            menu_state = now;
-            platform->SetMenuBar(knect4::app::BuildMenuBar(now), [&](int command) {
+            menu_state                 = now;
+            updates_shown              = revision;
+            reckless::app::MenuBar bar = knect4::app::BuildMenuBar(now);
+            if (updates)
+            {
+                // Help > Updates: the toolkit's rows, each choosing through its own action, so no command id here.
+                reckless::app::MenuEntry &help = bar.menus.back();
+                help.submenu.push_back(reckless::app::MenuEntry::Separator());
+                help.submenu.push_back(reckless::app::UpdatesMenuEntry(
+                    *updates, [](const std::string &url) { reckless::window::OpenInBrowser(url); }));
+            }
+            platform->SetMenuBar(std::move(bar), [&](int command) {
                 knect4::app::RunCommand(command, controller, handlers, sizes.Menu());
             });
         }
@@ -126,10 +152,21 @@ int main(int argc, char **argv)
         follow();
         board.GrabKeyboardFocus();
     };
-    hooks.on_frame = [&](double seconds) {
+    double update_poll = 0.0;
+    hooks.on_frame     = [&](double seconds) {
         sizes.Frame(seconds);
         controller.Frame(seconds);
         clicks.Frame(seconds);
+        if (updates)
+        {
+            // About once a second, as the check asks: it starts one when one is due, the window being on a screen.
+            update_poll += seconds;
+            if (update_poll >= 1.0)
+            {
+                update_poll = 0.0;
+                updates->Poll(true);
+            }
+        }
         view.Show(controller);
         follow();
         root.Frame();
