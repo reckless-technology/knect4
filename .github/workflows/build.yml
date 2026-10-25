@@ -191,10 +191,10 @@ jobs:
 
   # Every suite under AddressSanitizer and UndefinedBehaviorSanitizer (the sanitize preset's options), the window's
   # launch on Xvfb's display, with a leak a failure - but those of a desktop's PipeWire ALSA plugin, which the audio
-  # suite reaches through RtAudio (tools/lsan_suppressions.txt). The audio suite opens the machine's own output: ALSA's
-  # default device on a PulseAudio null sink here (.github/actions/sound-server). Tree build/ci-sanitize. So that a
-  # kernel's wider mmap randomisation never meets the sanitizers' fixed shadow memory, the suites run with the address
-  # space's randomisation off (setarch -R), which their children inherit.
+  # suite reaches through the toolkit's ALSA back end (tools/lsan_suppressions.txt). The audio suite opens the machine's
+  # own output: ALSA's default device on a PulseAudio null sink here (.github/actions/sound-server). Tree
+  # build/ci-sanitize. So that a kernel's wider mmap randomisation never meets the sanitizers' fixed shadow memory, the
+  # suites run with the address space's randomisation off (setarch -R), which their children inherit.
   sanitizers:
     name: Linux sanitizers (address, undefined)
     runs-on: ubuntu-24.04
@@ -226,10 +226,10 @@ jobs:
           ctest --test-dir build/ci-sanitize --output-on-failure -L '^window$'
 
   # Every suite under ThreadSanitizer (the tsan preset's options), its own build since it cannot share a process with
-  # AddressSanitizer: the click mixer between the window's thread and the audio thread, the computer's search on a thread
-  # of its own, RtAudio's callback thread on ALSA's default device (.github/actions/sound-server). The prebuilt Skia is
-  # not instrumented, and draws on the calling thread alone. Nothing is suppressed (tools/tsan_suppressions.txt). Tree
-  # build/ci-tsan; randomisation off as above.
+  # AddressSanitizer: the click mixer between the window's thread and the audio thread, the computer's search on a
+  # thread of its own, the toolkit's ALSA callback thread on ALSA's default device (.github/actions/sound-server). The
+  # prebuilt Skia is not instrumented, and draws on the calling thread alone. Nothing is suppressed
+  # (tools/tsan_suppressions.txt). Tree build/ci-tsan; randomisation off as above.
   tsan:
     name: Linux sanitizer (thread)
     runs-on: ubuntu-24.04
@@ -326,3 +326,26 @@ jobs:
           files=$(git ls-files -- 'src/*.h' 'src/*.cpp' 'tests/*.h' 'tests/*.cpp')
           echo "$(echo "$files" | grep -c .) files"
           "$venv/bin/clang-format" --dry-run -Werror $files
+
+  # The one check main's ruleset requires: green only when every job above is.
+  ci:
+    name: CI
+    needs: [windows, linux, macos, sanitizers, tsan, coverage, format]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: >-
+            windows=${{ needs.windows.result }} linux=${{ needs.linux.result }} macos=${{ needs.macos.result }}
+            sanitizers=${{ needs.sanitizers.result }} tsan=${{ needs.tsan.result }}
+            coverage=${{ needs.coverage.result }} format=${{ needs.format.result }}
+        run: |
+          failed=""
+          for result in $RESULTS; do
+            echo "$result"
+            [ "${result#*=}" = success ] || failed="$failed ${result%%=*}"
+          done
+          [ -z "$failed" ] || { echo "::error::not green:$failed"; exit 1; }
+          echo "Green."

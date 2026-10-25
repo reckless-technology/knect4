@@ -7,10 +7,10 @@ version from the toolkit's pins (external/reckless-toolkit/cmake/ToolkitPins.cma
 themselves, so the notices can only say what the build compiles. The parts are the ones the executable holds, read off
 its link map: Skia and the libraries it bundles, which the window draws through - Skia's own code with its colour
 management (skcms) and its PNG decoder, libpng and zlib, whose SIMD routines are the Chromium authors', and on Linux
-FreeType; the Noto Serif typeface it carries; and RtAudio and RtMidi, the toolkit's audio device layer, which plays the
-clicks. Of the toolkit's other fetches none is in the executable: Monocypher (the licence check), the audio file
-decoders (dr_libs, stb) and the ASIO SDK are on no link line of it or have nothing of theirs linked, and GoogleTest is
-the suites' alone. The skia-pack carries the licences of libpng, zlib and FreeType, read from it here; Skia's own and
+FreeType; and the Noto Serif typeface it carries. The toolkit's audio device layer, which plays the clicks, is the
+toolkit's own code on the system's audio APIs and holds nothing of another's. Of the toolkit's fetches none is in the
+executable: Monocypher (the licence check), the audio file decoders (dr_libs, stb) and the ASIO SDK are on no link line
+of it or have nothing of theirs linked, and GoogleTest is the suites' alone. The skia-pack carries the licences of libpng, zlib and FreeType, read from it here; Skia's own and
 the Chromium source tree's, which the pack lacks, are fetched by the toolkit beside it
 (external/reckless-toolkit/skia/CMakeLists.txt) and read from there. The four platforms' packs carry the same files, so
 the notices are the same from any build tree; a licence file the pack gains stops the script until it is read.
@@ -67,8 +67,7 @@ def uncomment(block):
 def pins():
     """The toolkit's pins the notices name, from its pins file, which its CMakeLists.txt reads."""
     found = dict(re.findall(r'set\((RECKLESS_[A-Z0-9_]+)\s+"([^"]*)"', read(TOOLKIT / "cmake" / "ToolkitPins.cmake")))
-    names = ("RECKLESS_RTAUDIO_VERSION", "RECKLESS_RTMIDI_VERSION", "RECKLESS_SKIA_TAG", "RECKLESS_SKIA_COMMIT",
-             "RECKLESS_CHROMIUM_COMMIT")
+    names = ("RECKLESS_SKIA_TAG", "RECKLESS_SKIA_COMMIT", "RECKLESS_CHROMIUM_COMMIT")
     missing = [n for n in names if n not in found]
     if missing:
         sys.exit(f"the toolkit's pins do not set {missing}")
@@ -147,13 +146,6 @@ def build(build_dir):
         sys.exit(f"Noto Serif's two faces are of different revisions ({sorted(noto_versions)}): name each")
     noto_version = noto_versions.pop()
 
-    for fetched in ("rtaudio", "rtmidi"):
-        if not (src(fetched) / "LICENSE").is_file():
-            sys.exit(f"this build tree did not fetch {fetched} (the toolkit's audio device layer): configure it with "
-                     "the window on")
-    rtaudio = read(src("rtaudio") / "LICENSE").strip("\n")
-    rtmidi = read(src("rtmidi") / "LICENSE").strip("\n")
-
     pack = skia_pack_dir(src)
     externals = pack / "third_party" / "externals"
     licence_files = {f.relative_to(pack).as_posix() for f in pack.rglob("*")
@@ -189,20 +181,12 @@ def build(build_dir):
     freetype_credit = freetype_credit.replace("<year>", freetype_year)
 
     # The sections in their order, each numbered by its place.
-    keys = ["noto", "rtaudio", "rtmidi", "skia", "png_skia", "zlib_skia", "freetype"]
+    keys = ["noto", "skia", "png_skia", "zlib_skia", "freetype"]
     n = {key: i + 1 for i, key in enumerate(keys)}
     sections = {
         "noto": (f"Noto Serif {noto_version}", APP, prose(
             "Knect 4 carries Noto Serif's regular and bold faces inside its executable and draws its text in them."),
             ofl),
-        "rtaudio": (f"RtAudio {p['RECKLESS_RTAUDIO_VERSION']}", APP, prose(
-            "Knect 4 plays its clicks through RtAudio, by way of the toolkit's audio device layer. Modified, as the "
-            "build fetches it: its ALSA back end, compiled on Linux, stops a device on an xrun, its stop threshold the "
-            "buffer's size where it was past the boundary, and starts a duplex stream's playback on a buffer of "
-            "silence; and its ASIO back end, which Knect 4 does not compile, hands the driver a bufferSwitchTimeInfo "
-            "callback where it left a null pointer - the fix the project made after this release."), rtaudio),
-        "rtmidi": (f"RtMidi {p['RECKLESS_RTMIDI_VERSION']}", APP, prose(
-            "Linked with RtAudio in the toolkit's audio device layer."), rtmidi),
         "skia": (f"Skia m{skia_milestone}, skia-pack {p['RECKLESS_SKIA_TAG']}", APP, prose(
             f"Knect 4 draws its window through Skia m{skia_milestone}, linked from the prebuilt static libraries of "
             f"the skia-pack release {p['RECKLESS_SKIA_TAG']}, built from Skia's commit {p['RECKLESS_SKIA_COMMIT']}. "
