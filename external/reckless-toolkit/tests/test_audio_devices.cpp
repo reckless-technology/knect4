@@ -1,10 +1,11 @@
-// The audio layer on the real APIs (audio/RtAudioDevice.cpp, the suite's AudioSystem on RtAudio): for every API
+// The audio layer on the real APIs (audio/DeviceBackends.h, whichever back end serves each API): for every API
 // the build carries - CoreAudio, Windows Audio (WASAPI, in its shared, low-latency and exclusive modes), ASIO, JACK,
 // ALSA - its device list, a stream run at a rate the
 // device offers with its callbacks counted against what the rate and the block predict and the rate read by the clock,
 // the samples a loop carries back (bit for bit through ALSA's loopback card and a JACK client wired to itself,
 // correlated through WASAPI's loopback capture, the ASIO test driver's own sine and sawtooth exactly), an xrun the
-// device reports, and a device that is not there. Each API's test device is deterministic and set up by the suite or
+// device reports, and a device that is not there; and on Linux, MIDI from a sequencer port of the test's own through
+// ALSA's sequencer back end. Each API's test device is deterministic and set up by the suite or
 // the CI job (devices/DeviceRig.h says which); the tables each test judges are printed. The harness is
 // devices/DeviceSuite.h, which a consumer's suite of an engine playing through the same devices shares.
 //
@@ -15,6 +16,10 @@
 // wherever their headers are), so a build that silently loses one fails here.
 #include "devices/DeviceSuite.h"
 
+#if defined(RECKLESS_AUDIO_TEST_ALSA_SEQ)
+#include <alsa/asoundlib.h>
+#endif
+
 using namespace reckless::audio::test::suite;
 
 // ---- The build's APIs ----------------------------------------------------------------------------------------------
@@ -23,7 +28,7 @@ TEST(AudioApis, AreTheOnesTheConfigurePromised)
 {
     const std::vector<std::string> apis = reckless::audio::AudioApis();
     Table("the build's audio APIs")
-        .Row("RtAudio carries", JoinList(apis))
+        .Row("the build carries", JoinList(apis))
         .Row("the configure promised", JoinList(PromisedApis()))
         .Row("the run requires", JoinList(RequiredApis()))
         .Row("libraries", reckless::audio::AudioLibraryVersions())
@@ -33,9 +38,8 @@ TEST(AudioApis, AreTheOnesTheConfigurePromised)
     EXPECT_EQ(apis, PromisedApis());
 
     // Every API the run requires is one of the series', and one this build carries.
-    const std::vector<std::string> series = {
-        "CoreAudio", "Windows Audio", "Windows Audio (Low Latency Mode)", "Windows Audio (Exclusive Mode)", "ASIO",
-        "JACK",      "ALSA"};
+    const std::vector<std::string> series = {"CoreAudio", "Windows Audio", "Windows Audio (Exclusive Mode)",
+                                             "ASIO",      "JACK",          "ALSA"};
     for (const std::string &api : RequiredApis())
     {
         EXPECT_NE(std::find(series.begin(), series.end(), api), series.end())
@@ -142,10 +146,10 @@ TEST_P(AudioDevices, ListsADeviceNamedOutsideAsciiInUtf8)
         GTEST_SKIP() << "a device named outside ASCII is made on CoreAudio alone, as a private aggregate";
     }
     // A device of the test's own named as macOS names a person's earphones - an apostrophe past ASCII - with a letter
-    // past ASCII too. RtAudio reads CoreAudio's names into UTF-8 only with UNICODE defined (the root CMakeLists), and
-    // otherwise in the system's encoding: Mac OS Roman's bytes, which are not UTF-8, which a setting of the device kept
-    // in UTF-8 never matches, and which the Standalone's settings would draw. RtAudio lists the device with its maker
-    // before its name, so it is found by the name it ends in.
+    // past ASCII too. The back end reads CoreAudio's names in UTF-8 - RtAudio read them in the system's encoding unless
+    // UNICODE was defined: Mac OS Roman's bytes, which a setting of the device kept in UTF-8 never matches, and which
+    // the Standalone's settings would draw. A device is listed with its maker before its name, as RtAudio listed it,
+    // so it is found by the name it ends in.
     const TestDevice output = Find();
     RECKLESS_NEED_TEST_DEVICE(output);
     const std::string                             name = "Reckless Test\xE2\x80\x99s Ger\xC3\xA4t";
@@ -199,19 +203,31 @@ TEST_P(AudioDevices, RunsAStreamAtTheRateAndTheBlockItOpenedAt)
     const bool          with_input = !device.input.empty();
     const StreamRequest request    = RequestFor(device, with_input);
     Recorder            recorder(with_input ? device.channels : 0, device.channels, Recorder::Play::kSilence);
-    ASSERT_TRUE(system_->Open(request, recorder)) << system_->LastError();
+    {
+        const Phase opening("system_->Open");
+        ASSERT_TRUE(system_->Open(request, recorder)) << system_->LastError();
+    }
     ASSERT_TRUE(system_->IsOpen());
     const StreamFormat format = system_->Format();
 
     const std::int64_t started = NowNanoseconds();
-    ASSERT_TRUE(system_->Start()) << system_->LastError();
+    {
+        const Phase starting("system_->Start");
+        ASSERT_TRUE(system_->Start()) << system_->LastError();
+    }
     RunFor(1.2);
     const std::int64_t stopped = NowNanoseconds();
-    system_->Stop();
+    {
+        const Phase stopping("system_->Stop");
+        system_->Stop();
+    }
     const std::int64_t after_stop = recorder.callbacks();
     RunFor(0.1);
     const std::int64_t later = recorder.callbacks();
-    system_->Close();
+    {
+        const Phase closing("system_->Close");
+        system_->Close();
+    }
 
     const Timing       timing    = Measure(recorder, started, stopped, format.sample_rate, format.block_size);
     const double       slack     = device.rate_tolerance * timing.predicted + 2.0;
@@ -246,7 +262,7 @@ TEST_P(AudioDevices, RunsAStreamAtTheRateAndTheBlockItOpenedAt)
     EXPECT_EQ(timing.fewest, format.block_size);
     EXPECT_EQ(timing.most, format.block_size);
 
-    // Every block carried the channels it opened, laid out as RtAudioDevice promises, on the API's own thread.
+    // Every block carried the channels it opened, laid out as every back end promises, on the API's own thread.
     EXPECT_EQ(recorder.layout_faults(), 0) << recorder.first_layout_fault();
     EXPECT_EQ(recorder.on_test_thread(), 0);
     EXPECT_LE(recorder.xruns(), allowance);
@@ -371,9 +387,10 @@ TEST_P(AudioDevices, CarriesTheSamplesALoopBringsBack)
     else
     {
         // The ASIO test driver's inputs: its sine on the first, its sawtooth on the second, every block the same 256
-        // 16-bit samples (AsioRig.cpp makes them as the driver does), each read as int16 / 32768 exactly. RtAudio hands
-        // a callback the input of the block before - its own buffer, filled after the callback runs - so the first
-        // callback's input is silence: one block of it, and no more, before the driver's samples.
+        // 16-bit samples (AsioRig.cpp makes them as the driver does), each read as int16 / 32768 exactly. The driver
+        // fills the half of its input buffers it is about to hand over, and the back end reads that half in the same
+        // switch, so the first callback already carries the driver's samples: none of silence before them. (RtAudio
+        // read the half before, a block late.)
         const std::vector<std::vector<float>> waves = reckless::audio::test::AsioTestDriverWaves();
         ASSERT_EQ(waves.size(), 2u);
         const std::size_t period = waves[0].size();
@@ -400,8 +417,9 @@ TEST_P(AudioDevices, CarriesTheSamplesALoopBringsBack)
             }
         }
         Table(api_ + ": the test driver's own inputs")
-            .Row("silent before the driver's samples", Str(static_cast<std::int64_t>(lead)) + " frames (one block: " +
-                                                           Str(static_cast<std::int64_t>(format.block_size)) + ")")
+            .Row("silent before the driver's samples",
+                 Str(static_cast<std::int64_t>(lead)) +
+                     " frames (none; a block: " + Str(static_cast<std::int64_t>(format.block_size)) + ")")
             .Row("samples compared, exactly", Str(compared) + " over 2 channels")
             .Row("mismatches",
                  Str(mismatches) + (mismatches > 0
@@ -409,10 +427,63 @@ TEST_P(AudioDevices, CarriesTheSamplesALoopBringsBack)
                                         : std::string()))
             .Row("xruns reported", Str(xruns))
             .Print();
-        EXPECT_EQ(lead, static_cast<std::size_t>(format.block_size)) << "the driver's samples did not start a block in";
+        EXPECT_EQ(lead, 0u) << "the driver's samples did not start with the first callback";
         EXPECT_EQ(mismatches, 0) << "an input sample is not the driver's sine or sawtooth read as int16 / 32768";
         EXPECT_GE(compared, static_cast<std::int64_t>(rate)); // two channels of at least half a second
     }
+}
+
+// ---- Each API: the periods a stream asks for -----------------------------------------------------------------------
+
+TEST_P(AudioDevices, BuffersThePeriodsTheRequestAsksFor)
+{
+    if (api_ != "ALSA")
+    {
+        GTEST_SKIP() << api_
+                     << " buffers as it does: ALSA alone lets a stream choose its periods (StreamRequest::periods)";
+    }
+    const TestDevice device = Find();
+    RECKLESS_NEED_TEST_DEVICE(device);
+    if (device.loop != Loop::kExact)
+    {
+        GTEST_SKIP() << "the latency is read off an exact loop, which " << api_ << "'s test device is not";
+    }
+    // Each sample back names the frame it was played as, so the loop's latency is read to the frame: an output primed
+    // with a buffer of the periods asked for brings each frame back that many blocks later.
+    Table table(api_ + ": the periods a stream asks for (asked: opened, reported latency, loop latency, xruns)");
+    for (const int periods : {2, 3, 4})
+    {
+        StreamRequest request = RequestFor(device, true);
+        request.periods       = periods;
+        Recorder     recorder(device.channels, device.channels, Recorder::Play::kIndices);
+        StreamFormat format;
+        {
+            const StreamCloser closer(*system_); // before the Recorder goes, whatever fails
+            ASSERT_TRUE(system_->Open(request, recorder)) << system_->LastError();
+            format = system_->Format();
+            ASSERT_TRUE(system_->Start()) << system_->LastError();
+            std::string why;
+            ASSERT_TRUE(rig_->Started(kClient, why)) << why;
+            RunFor(0.6);
+            system_->Stop();
+            system_->Close();
+        }
+        const LoopScan scan = ScanLoop(recorder.recorded(0), recorder.recorded(1), recorder.recorded_frames());
+        ASSERT_LT(scan.first, recorder.recorded_frames()) << "nothing came back: the loop carried silence";
+        const std::int64_t loop = static_cast<std::int64_t>(scan.first) - scan.played_at_first;
+        table.Row(Str(periods), Str(format.periods) + ", " + Str(format.reported_latency) + " samples, " + Str(loop) +
+                                    " samples (" + Fixed(1e3 * static_cast<double>(loop) / format.sample_rate, 2) +
+                                    " ms), " + Str(recorder.xruns()));
+        EXPECT_EQ(format.periods, periods);
+        EXPECT_EQ(format.reported_latency, (periods - 1) * format.block_size) << periods << " periods";
+        EXPECT_EQ(scan.corrupt, 0);
+        if (recorder.xruns() == 0)
+        {
+            EXPECT_EQ(loop, static_cast<std::int64_t>(periods) * format.block_size) << periods << " periods";
+        }
+        EXPECT_LE(recorder.xruns(), XrunAllowance(static_cast<std::int64_t>(recorder.callbacks())));
+    }
+    table.Print();
 }
 
 // ---- Each API: a device that is not there --------------------------------------------------------------------------
@@ -579,6 +650,327 @@ TEST_P(AudioDevices, CountsAnXrunAndPlaysOnAfterIt)
         EXPECT_GE(tail_s, 0.30) << "the loop did not come back to one frame after another";
     }
 }
+
+// ---- MIDI: ALSA's sequencer --------------------------------------------------------------------------------------
+
+#if defined(RECKLESS_AUDIO_TEST_ALSA_SEQ) || defined(__APPLE__)
+namespace
+{
+/** What a MIDI input delivered: each message's port, time and bytes, into storage made up front, read once the inputs
+    are closed. */
+class Collected final : public reckless::audio::MidiSink
+{
+  public:
+    static constexpr int kMost = 64; ///< the messages kept
+
+    void Arrived(int port, std::int64_t time, const std::uint8_t *bytes, int size) noexcept override
+    {
+        const int n = count_.load(std::memory_order_relaxed);
+        if (n < kMost)
+        {
+            ports_[static_cast<std::size_t>(n)] = port;
+            times_[static_cast<std::size_t>(n)] = time;
+            messages_[static_cast<std::size_t>(n)].assign(bytes, bytes + size);
+        }
+        count_.store(n + 1, std::memory_order_release);
+    }
+
+    int count() const noexcept
+    {
+        return count_.load(std::memory_order_acquire);
+    }
+
+    int port_at(int i) const noexcept
+    {
+        return ports_[static_cast<std::size_t>(i)];
+    }
+
+    std::int64_t time_at(int i) const noexcept
+    {
+        return times_[static_cast<std::size_t>(i)];
+    }
+
+    const std::vector<std::uint8_t> &message_at(int i) const noexcept
+    {
+        return messages_[static_cast<std::size_t>(i)];
+    }
+
+    /** Until `n` messages have arrived, for up to two seconds.
+        @param n  the messages to wait for
+        @return   true when they came */
+    bool AwaitCount(int n) const
+    {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (count() < n && std::chrono::steady_clock::now() < until)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        return count() >= n;
+    }
+
+  private:
+    std::atomic<int>                             count_{0};
+    std::array<int, kMost>                       ports_{};
+    std::array<std::int64_t, kMost>              times_{};
+    std::array<std::vector<std::uint8_t>, kMost> messages_; // assigned on the MIDI thread: test code, not a core
+};
+
+#if defined(RECKLESS_AUDIO_TEST_ALSA_SEQ)
+/** A sequencer client of the test's own with one readable port, which sends straight to whoever subscribes. */
+class TestSource
+{
+  public:
+    TestSource()
+    {
+        if (snd_seq_open(&seq_, "default", SND_SEQ_OPEN_OUTPUT, 0) < 0)
+        {
+            seq_ = nullptr;
+            return;
+        }
+        snd_seq_set_client_name(seq_, "Reckless test source");
+        port_ = snd_seq_create_simple_port(seq_, "out", SND_SEQ_PORT_CAP_READ | SND_SEQ_PORT_CAP_SUBS_READ,
+                                           SND_SEQ_PORT_TYPE_MIDI_GENERIC | SND_SEQ_PORT_TYPE_APPLICATION);
+    }
+
+    ~TestSource()
+    {
+        if (seq_ != nullptr)
+        {
+            snd_seq_close(seq_);
+        }
+    }
+
+    TestSource(const TestSource &)            = delete;
+    TestSource &operator=(const TestSource &) = delete;
+
+    bool made() const noexcept
+    {
+        return seq_ != nullptr && port_ >= 0;
+    }
+
+    /** The name the layer lists the port under: RtMidi's "<client>:<port> <client number>:<port number>". */
+    std::string Name() const
+    {
+        return "Reckless test source:out " + std::to_string(snd_seq_client_id(seq_)) + ":" + std::to_string(port_);
+    }
+
+    /** `event` sent to the port's subscribers at once. */
+    void Send(snd_seq_event_t event)
+    {
+        snd_seq_ev_set_source(&event, port_);
+        snd_seq_ev_set_subs(&event);
+        snd_seq_ev_set_direct(&event);
+        snd_seq_event_output_direct(seq_, &event);
+    }
+
+  private:
+    snd_seq_t *seq_{nullptr};
+    int        port_{-1};
+};
+#endif
+} // namespace
+
+#if defined(RECKLESS_AUDIO_TEST_ALSA_SEQ)
+TEST(MidiInputs, CarryWhatASequencerPortSendsButWhatTheCoresIgnore)
+{
+    TestSource source;
+    const bool required = std::find(RequiredApis().begin(), RequiredApis().end(), "ALSA") != RequiredApis().end();
+    if (!source.made())
+    {
+        if (required)
+        {
+            FAIL() << "ALSA is required (RECKLESS_AUDIO_REQUIRE) and its sequencer would not open: is snd-seq loaded?";
+        }
+        GTEST_SKIP() << "ALSA's sequencer would not open: no snd-seq in this kernel";
+    }
+    const auto                     midi   = reckless::audio::MakeMidiSystem("Reckless MIDI test");
+    const std::vector<std::string> inputs = midi->Inputs();
+    Table                          table("ALSA sequencer: the inputs");
+    for (const std::string &input : inputs)
+    {
+        table.Row(input, "");
+    }
+    table.Row("library", reckless::audio::AudioLibraryVersions()).Print();
+    ASSERT_NE(std::find(inputs.begin(), inputs.end(), source.Name()), inputs.end())
+        << "the test's port, listed as " << source.Name();
+
+    // Refused by a name that is nowhere, the error naming it.
+    Collected nothing;
+    EXPECT_FALSE(midi->Open("Reckless: no such MIDI input", 0, nothing));
+    EXPECT_NE(midi->LastError().find("Reckless: no such MIDI input"), std::string::npos) << midi->LastError();
+
+    // Found by its name with other numbers after it, as a device plugged in again comes back.
+    Collected sink;
+    ASSERT_TRUE(midi->Open("Reckless test source:out 999:9", 3, sink)) << midi->LastError();
+
+    const std::int64_t before = NowNanoseconds();
+    snd_seq_event_t    event;
+    snd_seq_ev_clear(&event);
+    snd_seq_ev_set_noteon(&event, 1, 60, 100);
+    source.Send(event);
+    std::uint8_t sysex[] = {0xF0, 0x7D, 0x01, 0x02, 0xF7};
+    snd_seq_ev_clear(&event);
+    snd_seq_ev_set_sysex(&event, sizeof sysex, sysex);
+    source.Send(event);
+    snd_seq_ev_clear(&event);
+    event.type = SND_SEQ_EVENT_CLOCK;
+    source.Send(event);
+    snd_seq_ev_clear(&event);
+    snd_seq_ev_set_controller(&event, 0, 7, 64);
+    source.Send(event);
+    snd_seq_ev_clear(&event);
+    event.type = SND_SEQ_EVENT_SENSING;
+    source.Send(event);
+    snd_seq_ev_clear(&event);
+    snd_seq_ev_set_noteoff(&event, 1, 60, 0);
+    source.Send(event);
+    snd_seq_ev_clear(&event);
+    snd_seq_ev_set_pitchbend(&event, 15, 0);
+    source.Send(event);
+    const bool         came  = sink.AwaitCount(4);
+    const std::int64_t after = NowNanoseconds();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // anything left out would have come by now
+    midi->CloseAll();
+    const int counted = sink.count();
+
+    // Closed: nothing more reaches the sink.
+    snd_seq_ev_clear(&event);
+    snd_seq_ev_set_noteon(&event, 1, 61, 100);
+    source.Send(event);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    const std::vector<std::vector<std::uint8_t>> want = {
+        {0x91, 60, 100}, {0xB0, 7, 64}, {0x81, 60, 0}, {0xEF, 0x00, 0x40}};
+    Table result("ALSA sequencer: what arrived");
+    for (int i = 0; i < std::min(counted, Collected::kMost); ++i)
+    {
+        std::string bytes;
+        for (const std::uint8_t b : sink.message_at(i))
+        {
+            char hex[4];
+            std::snprintf(hex, sizeof hex, "%02X ", b);
+            bytes += hex;
+        }
+        result.Row("message " + Str(i + 1), bytes + "port " + Str(sink.port_at(i)) + ", " +
+                                                Fixed(static_cast<double>(sink.time_at(i) - before) * 1e-6, 2) +
+                                                " ms after the first was sent");
+    }
+    result.Row("after the inputs closed", Str(sink.count() - counted) + " messages").Print();
+
+    ASSERT_TRUE(came) << "the messages did not all arrive";
+    ASSERT_EQ(counted, static_cast<int>(want.size()))
+        << "system exclusive, timing clock and active sensing are left out, and nothing else";
+    for (int i = 0; i < counted; ++i)
+    {
+        EXPECT_EQ(sink.message_at(i), want[static_cast<std::size_t>(i)]) << "message " << i + 1;
+        EXPECT_EQ(sink.port_at(i), 3) << "the index the input was opened under";
+        EXPECT_GE(sink.time_at(i), before);
+        EXPECT_LE(sink.time_at(i), after);
+        if (i > 0)
+        {
+            EXPECT_GE(sink.time_at(i), sink.time_at(i - 1)) << "stamped in the order they came";
+        }
+    }
+    EXPECT_EQ(sink.count(), counted) << "a message reached the sink after CloseAll";
+    EXPECT_EQ(nothing.count(), 0);
+}
+#endif
+
+#if defined(__APPLE__)
+TEST(MidiInputs, CarryWhatACoreMidiSourceSendsButWhatTheCoresIgnore)
+{
+    // A virtual source of the test's own on MIDI 1.0's protocol: listed by its name (a source with no entity is named
+    // by its endpoint alone), opened, and sent Universal MIDI Packets - a note on and off, a controller and a pitch
+    // bend, and between them the kinds the cores do not read.
+    const std::string                        name = "Reckless test source";
+    reckless::audio::test::PrivateMidiSource source(name);
+    if (!source.made())
+    {
+        if (std::find(RequiredApis().begin(), RequiredApis().end(), "CoreAudio") != RequiredApis().end())
+        {
+            FAIL() << "CoreAudio is required and CoreMIDI would not make a source: " << source.why();
+        }
+        GTEST_SKIP() << "CoreMIDI would not make a source: " << source.why();
+    }
+    const auto               midi = reckless::audio::MakeMidiSystem("Reckless MIDI test");
+    std::vector<std::string> inputs;
+    for (int i = 0; i < 100 && std::find(inputs.begin(), inputs.end(), name) == inputs.end(); ++i)
+    {
+        inputs = midi->Inputs(); // a source made is listed at once, but give CoreMIDI its moment
+        if (std::find(inputs.begin(), inputs.end(), name) == inputs.end())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    }
+    Table table("CoreMIDI: the inputs");
+    for (const std::string &input : inputs)
+    {
+        table.Row(input, "");
+    }
+    table.Row("library", reckless::audio::AudioLibraryVersions()).Print();
+    ASSERT_NE(std::find(inputs.begin(), inputs.end(), name), inputs.end()) << "the test's source, listed as " << name;
+
+    Collected nothing;
+    EXPECT_FALSE(midi->Open("Reckless: no such MIDI input", 0, nothing));
+    EXPECT_NE(midi->LastError().find("Reckless: no such MIDI input"), std::string::npos) << midi->LastError();
+
+    Collected sink;
+    ASSERT_TRUE(midi->Open(name, 3, sink)) << midi->LastError();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // the connection made before anything is sent
+    const std::int64_t                            before  = NowNanoseconds();
+    const std::vector<std::vector<std::uint32_t>> packets = {
+        {0x20913C64u},              // note on, channel 2
+        {0x30037D01u, 0x02000000u}, // a system exclusive, left out
+        {0x10F80000u},              // timing clock, left out
+        {0x20B00740u},              // a controller
+        {0x10FE0000u},              // active sensing, left out
+        {0x20813C00u},              // note off
+        {0x20EF0040u},              // a pitch bend, channel 16
+    };
+    for (const auto &packet : packets)
+    {
+        source.Send(packet.data(), static_cast<int>(packet.size()));
+    }
+    const bool         came  = sink.AwaitCount(4);
+    const std::int64_t after = NowNanoseconds();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // anything left out would have come by now
+    midi->CloseAll();
+    const int           counted = sink.count();
+    const std::uint32_t late[]  = {0x20913D64u};
+    source.Send(late, 1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    const std::vector<std::vector<std::uint8_t>> want = {
+        {0x91, 60, 100}, {0xB0, 7, 64}, {0x81, 60, 0}, {0xEF, 0x00, 0x40}};
+    Table result("CoreMIDI: what arrived");
+    for (int i = 0; i < std::min(counted, Collected::kMost); ++i)
+    {
+        std::string bytes;
+        for (const std::uint8_t b : sink.message_at(i))
+        {
+            char hex[4];
+            std::snprintf(hex, sizeof hex, "%02X ", b);
+            bytes += hex;
+        }
+        result.Row("message " + Str(i + 1), bytes + "port " + Str(sink.port_at(i)));
+    }
+    result.Row("after the inputs closed", Str(sink.count() - counted) + " messages").Print();
+
+    ASSERT_TRUE(came) << "the messages did not all arrive";
+    ASSERT_EQ(counted, static_cast<int>(want.size()))
+        << "system exclusive, timing clock and active sensing are left out, and nothing else";
+    for (int i = 0; i < counted; ++i)
+    {
+        EXPECT_EQ(sink.message_at(i), want[static_cast<std::size_t>(i)]) << "message " << i + 1;
+        EXPECT_EQ(sink.port_at(i), 3);
+        EXPECT_GE(sink.time_at(i), before);
+        EXPECT_LE(sink.time_at(i), after);
+    }
+    EXPECT_EQ(sink.count(), counted) << "a message reached the sink after CloseAll";
+    EXPECT_EQ(nothing.count(), 0);
+}
+#endif
+#endif
 
 GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(AudioDevices);
 INSTANTIATE_TEST_SUITE_P(Apis, AudioDevices, ::testing::ValuesIn(TestedApis()), ApiTestName);

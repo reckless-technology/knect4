@@ -11,12 +11,14 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -25,14 +27,107 @@
 
 #include "AudioSettings.h"
 #include "CountAllocations.h"
+#include "DeviceBackends.h"
 #include "DeviceRig.h"
-#include "RtAudioDevice.h"
 #include "Text.h"
 
 #include <gtest/gtest.h>
 
 namespace reckless::audio::test::suite
 {
+
+/** A line every few seconds naming the case it is in and how long it has been there, for as long as it is alive.
+    The device suite opens real devices and runs real streams, so a case takes tens of seconds and ctest, which
+    shows a test's output only once it ends, would otherwise print nothing at all between one case and the next -
+    a working run and a hung one look the same. One of these in a fixture's SetUp makes the difference visible.
+    It writes to stderr, unbuffered and never interleaved with a partial line, and stops in its destructor. */
+class Heartbeat
+{
+  public:
+    /** @param what  the case's name, printed on every beat
+        @param every the gap between beats */
+    explicit Heartbeat(std::string what, std::chrono::seconds every = std::chrono::seconds(5))
+        : what_(std::move(what)), every_(every), thread_([this] {
+              const auto                   started = std::chrono::steady_clock::now();
+              std::unique_lock<std::mutex> lock(mutex_);
+              while (!stopping_)
+              {
+                  if (wake_.wait_for(lock, every_, [this] { return stopping_; }))
+                  {
+                      return;
+                  }
+                  const auto seconds =
+                      std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() - started);
+                  std::fprintf(stderr, "[ RUNNING  ] %s, %llds so far\n", what_.c_str(),
+                               static_cast<long long>(seconds.count()));
+                  std::fflush(stderr);
+              }
+          })
+    {
+    }
+
+    /** Stops the beat and waits for its thread: sets #stopping_ under #mutex_, wakes the thread and joins it, so
+        nothing of it outlives the case it was timing. */
+    ~Heartbeat()
+    {
+        {
+            const std::lock_guard<std::mutex> lock(mutex_);
+            stopping_ = true;
+        }
+        wake_.notify_all();
+        thread_.join();
+    }
+
+    Heartbeat(const Heartbeat &)            = delete;
+    Heartbeat &operator=(const Heartbeat &) = delete;
+
+  private:
+    std::string             what_;            ///< the case's name
+    std::chrono::seconds    every_;           ///< the gap between beats
+    std::mutex              mutex_;           ///< guards stopping_
+    std::condition_variable wake_;            ///< ends the wait at once when the case does
+    bool                    stopping_{false}; ///< set in the destructor
+    std::thread             thread_;          ///< beats until stopping_
+};
+
+/** How long a phase of a case took, printed as it ends. The heartbeat says a case is still alive; this says
+    what it was doing and for how long, which is what a slow case needs: the suite's own measurements cover the
+    stream, and a case whose stream is a healthy second can still take a minute around it - opening a device,
+    closing one, or waiting for a sound server to let go. Written to stderr beside the heartbeat's lines, and only
+    where it took long enough to be worth a line (`kQuiet`), so a fast machine's log stays readable. */
+class Phase
+{
+  public:
+    /** The gap below which a phase says nothing: a phase of a few milliseconds is not what anyone is looking for. */
+    static constexpr std::chrono::milliseconds kQuiet{250};
+
+    /** @param what  what is being timed, named as it would be said */
+    explicit Phase(std::string what) : what_(std::move(what)), started_(std::chrono::steady_clock::now())
+    {
+    }
+
+    /** Ends the phase and prints how long it took, to stderr, but only where it took at least #kQuiet: a phase of a
+        few milliseconds is not what anyone reading these lines is looking for. */
+    ~Phase()
+    {
+        const auto took =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started_);
+        if (took >= kQuiet)
+        {
+            std::fprintf(stderr, "[ PHASE    ] %s took %.1f s\n", what_.c_str(),
+                         static_cast<double>(took.count()) / 1000.0);
+            std::fflush(stderr);
+        }
+    }
+
+    Phase(const Phase &)            = delete;
+    Phase &operator=(const Phase &) = delete;
+
+  private:
+    std::string                           what_;    ///< what is being timed
+    std::chrono::steady_clock::time_point started_; ///< when it began
+};
+
 using reckless::audio::AudioCallback;
 using reckless::audio::AudioSettings;
 using reckless::audio::AudioSystem;
@@ -297,7 +392,7 @@ inline float NoiseSample(std::int64_t frame, int channel)
 
 /**
     What a stream test opens a stream on: each callback stamped and counted, its block and its channel pointers checked
-    against the layout RtAudioDevice promises (every channel's frames after the channel before's), a signal played and
+    against the layout every back end promises (every channel's frames after the channel before's), a signal played and
     the first two inputs recorded - all into storage sized when it is built, so the audio thread allocates nothing.
     Read only once the stream has stopped, but for the count.
 */
@@ -447,7 +542,7 @@ class Recorder final : public AudioCallback
         return xruns_[i] != 0;
     }
 
-    /** @return the callbacks whose channels were not laid out as RtAudioDevice promises */
+    /** @return the callbacks whose channels were not laid out as every back end promises */
     std::int64_t layout_faults() const noexcept
     {
         return layout_faults_;
@@ -485,7 +580,7 @@ class Recorder final : public AudioCallback
     }
 
   private:
-    /** The block's channels as RtAudioDevice lays them out: the counts the stream opened, every pointer there, each
+    /** The block's channels as every back end lays them out: the counts the stream opened, every pointer there, each
         channel's frames after the channel before's in one buffer each way. The first fault is described (a fixed
         string, chosen not built).
         @param inputs           the block's input pointers
@@ -590,7 +685,7 @@ class StreamCloser
 /**
     An AudioSystem round the real one that runs the engine's callback between two counts of the allocations the audio
     thread makes (CountAllocations.h), so a total of zero is an engine and a core that allocated nothing on the API's
-    own thread - RtAudio's work round the callback is not counted, the engine's and the core's is.
+    own thread - the back end's work round the callback is not counted, the engine's and the core's is.
 */
 class CountingAudioSystem final : public AudioSystem, private AudioCallback
 {
@@ -608,27 +703,32 @@ class CountingAudioSystem final : public AudioSystem, private AudioCallback
 
     std::vector<DeviceInfo> Devices() override
     {
+        const Phase listing("listing the devices");
         return inner_->Devices();
     }
 
     bool Open(const StreamRequest &request, AudioCallback &callback) override
     {
+        const Phase opening("opening the stream");
         callback_ = &callback;
         return inner_->Open(request, *this);
     }
 
     bool Start() override
     {
+        const Phase starting("starting the stream");
         return inner_->Start();
     }
 
     void Stop() override
     {
+        const Phase stopping("stopping the stream");
         inner_->Stop();
     }
 
     void Close() override
     {
+        const Phase closing("closing the stream");
         inner_->Close();
     }
 
@@ -706,8 +806,17 @@ class CoreAudioRig final : public DeviceRig
                 device.block_size  = 256;
                 device.loop        = Loop::kNone;
                 device.xrun_by     = reckless::audio::test::XrunBy::kStall;
-                device.about       = "the default output, written with silence (no input: one would ask the person at "
-                                     "the machine for the microphone)";
+                // A hosted macOS runner's only output is a virtual machine's device, whose clock is a thread the
+                // hypervisor schedules: its late cycles are overloads the machine's load makes, not the layer's, as
+                // JACK's dummy driver's are (TestDevice::is_scheduler_timed). Real hardware is held to the strict
+                // count.
+                if (info.name.find("Apple Virtual Sound Device") != std::string::npos)
+                {
+                    device.is_scheduler_timed = true;
+                    device.rate_tolerance     = 0.10;
+                }
+                device.about = "the default output, written with silence (no input: one would ask the person at "
+                               "the machine for the microphone)";
                 return device;
             }
         }
@@ -718,7 +827,7 @@ class CoreAudioRig final : public DeviceRig
 
 /** ALSA's test device: the kernel's loopback card (snd-aloop), whose playback on device 0 comes back as capture on
     device 1, subdevice by subdevice, bit for bit - the CI job loads it and gives its user the card's nodes. Its two
-    devices carry one name in RtAudio's list, the second with its ordinal (RtAudioDevice.h). */
+    devices carry one name, and the second is listed with its ordinal (AudioDevice.h's NameApart). */
 class AlsaRig final : public DeviceRig
 {
   public:
@@ -750,7 +859,7 @@ class AlsaRig final : public DeviceRig
         device.block_size     = 256;
         device.loop           = Loop::kExact;
         device.rate_tolerance = 0.03;
-        device.xrun_by        = reckless::audio::test::XrunBy::kStall; // RtAudio's ALSA back end, patched by the build
+        device.xrun_by        = reckless::audio::test::XrunBy::kStall; // the device stops, and is started again
         device.about = "snd-aloop: playback on hw:Loopback,0 comes back as capture on hw:Loopback,1, bit for bit";
         return device;
     }
@@ -790,7 +899,7 @@ inline std::unique_ptr<DeviceRig> MakeRig(const std::string &api)
     }
 #endif
 #if defined(_WIN32)
-    if (api == "Windows Audio" || api == "Windows Audio (Low Latency Mode)")
+    if (api == "Windows Audio")
     {
         return reckless::audio::test::MakeWasapiRig(false);
     }
@@ -949,22 +1058,39 @@ class AudioDevices : public ::testing::TestWithParam<std::string>
             FAIL() << api_ << " is required (RECKLESS_AUDIO_REQUIRE) and this build does not carry it: the build "
                    << "carries " << JoinList(apis);
         }
-        rig_ = MakeRig(api_);
+        const ::testing::TestInfo *info = ::testing::UnitTest::GetInstance()->current_test_info();
+        beat_                           = std::make_unique<Heartbeat>(
+            info == nullptr ? api_ : std::string(info->test_suite_name()) + "." + info->name());
+        {
+            const Phase making("the test rig (" + api_ + ")");
+            rig_ = MakeRig(api_);
+        }
         ASSERT_NE(rig_, nullptr) << "no test rig for " << api_;
-        system_ = reckless::audio::MakeAudioSystem(api_);
+        {
+            const Phase making("the audio system (" + api_ + ")");
+            system_ = reckless::audio::MakeAudioSystem(api_);
+        }
         ASSERT_NE(system_, nullptr) << api_;
     }
 
     /** The system, then the rig. */
     void TearDown() override
     {
-        system_.reset();
-        rig_.reset();
+        {
+            const Phase letting_go("letting the audio system go (" + api_ + ")");
+            system_.reset();
+        }
+        {
+            const Phase letting_go("letting the test rig go (" + api_ + ")");
+            rig_.reset();
+        }
+        beat_.reset();
     }
 
     /** @return the test device, in the API's list probed afresh */
     TestDevice Find()
     {
+        const Phase probing("probing the devices (" + api_ + ")");
         return rig_->Find(system_->Devices());
     }
 
@@ -999,6 +1125,7 @@ class AudioDevices : public ::testing::TestWithParam<std::string>
     std::string                  api_;    ///< the case's API
     std::unique_ptr<DeviceRig>   rig_;    ///< its test device's rig, made first
     std::unique_ptr<AudioSystem> system_; ///< its system
+    std::unique_ptr<Heartbeat>   beat_;   ///< says the case is alive while it runs; stopped before the rig goes
 };
 
 /** The test device, or the test skipped with the reason printed - or failed, naming what is missing, where the run
@@ -1047,8 +1174,8 @@ namespace reckless::audio::test::suite
     @return      the cases' exit code */
 inline int RunDeviceSuite(int argc, char **argv)
 {
-    // First, before anything else reads the registry: the views the ASIO test driver's registration gave RtAudio's
-    // driver list as the binary loaded, put back (AsioRig.cpp).
+    // First, before anything else reads the registry: the views the ASIO test driver's registration gave the ASIO back
+    // end's driver list as the binary loaded, put back (AsioRig.cpp).
     reckless::audio::test::FinishAsioRegistration();
     std::printf("Audio devices: %s; the build carries %s; the run requires %s\n",
                 reckless::audio::AudioLibraryVersions().c_str(), JoinList(reckless::audio::AudioApis()).c_str(),
