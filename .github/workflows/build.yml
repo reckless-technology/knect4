@@ -228,8 +228,8 @@ jobs:
   # Every suite under ThreadSanitizer (the tsan preset's options), its own build since it cannot share a process with
   # AddressSanitizer: the click mixer between the window's thread and the audio thread, the computer's search on a
   # thread of its own, the toolkit's ALSA callback thread on ALSA's default device (.github/actions/sound-server). The
-  # prebuilt Skia is not instrumented, and draws on the calling thread alone. Nothing is suppressed
-  # (tools/tsan_suppressions.txt). Tree build/ci-tsan; randomisation off as above.
+  # prebuilt Skia is not instrumented, and draws on the calling thread alone. PulseAudio's client libraries,
+  # which the null sink brings in and which are not instrumented either, are ignored (tools/tsan_suppressions.txt). Tree build/ci-tsan; randomisation off as above.
   tsan:
     name: Linux sanitizer (thread)
     runs-on: ubuntu-24.04

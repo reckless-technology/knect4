@@ -110,7 +110,8 @@ cmake --build --preset release
 under AddressSanitizer and UndefinedBehaviorSanitizer, the `tsan` preset under ThreadSanitizer (gcc or clang, Linux or
 macOS); each has a build and a test preset of the same name. The `sanitize` test preset leaves out the leaks of the
 system's PipeWire ALSA plugin, which the audio suite reaches through the toolkit's ALSA back end
-(`tools/lsan_suppressions.txt`); the `tsan` test preset suppresses nothing (`tools/tsan_suppressions.txt`).
+(`tools/lsan_suppressions.txt`), and the `tsan` test preset the uninstrumented PulseAudio client libraries the
+same back end reaches on a PulseAudio machine (`tools/tsan_suppressions.txt`).
 
 ### Building on macOS
 
