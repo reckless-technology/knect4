@@ -1,3 +1,13 @@
 # ThreadSanitizer's suppressions for the tsan build (TSAN_OPTIONS=suppressions=<this file>; the tsan test preset and
-# build.yml's ThreadSanitizer job set it). None. A suppression added here is race_top, matched against the racing
-# access's own function alone, so a race in code it calls - the game's audio callback among it - is still reported.
+# build.yml's ThreadSanitizer job set it). A race suppressed here by race_top is matched against the racing access's
+# own function alone, so a race in code it calls - the game's audio callback among it - is still reported.
+#
+# PulseAudio's client libraries: on a machine whose ALSA default is PulseAudio's (the hosted runner's, through
+# .github/actions/sound-server), the toolkit's ALSA back end opening the default device starts libpulse's own mainloop
+# thread, which locks a mutex libpulse allocated on the opening thread and handed over through its own synchronisation.
+# libpulse is not built with ThreadSanitizer, so that hand-over is invisible and the lock is reported as a race on the
+# allocation, now and then (pa_mutex_lock against pa_xmalloc, both inside libpulsecommon). called_from_lib ignores what
+# those libraries do through the interceptors - their own locks and allocations - and nothing of the game's or the
+# toolkit's code.
+called_from_lib:libpulsecommon
+called_from_lib:libpulse.so
