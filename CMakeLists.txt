@@ -51,7 +51,7 @@ option(KNECT4_TSAN "Build everything with ThreadSanitizer (gcc or clang)" OFF)
 # both sides. UndefinedBehaviorSanitizer's vptr check reads the type information of every polymorphic class a checked
 # call reaches, and the window's prebuilt Skia is built without it (-fno-rtti): that one check is left out, the rest
 # kept. ThreadSanitizer cannot share a process with AddressSanitizer, so it is a build of its own; it sees only what was
-# compiled under it - the game, the toolkit and RtAudio, not the prebuilt Skia, which draws on the calling thread alone.
+# compiled under it - the game and the toolkit, not the prebuilt Skia, which draws on the calling thread alone.
 if(KNECT4_SANITIZE AND KNECT4_TSAN)
     message(FATAL_ERROR "KNECT4_SANITIZE and KNECT4_TSAN are separate builds: ThreadSanitizer cannot run beside "
                         "AddressSanitizer")

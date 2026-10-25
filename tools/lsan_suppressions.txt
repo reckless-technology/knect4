@@ -1,8 +1,8 @@
 # LeakSanitizer's suppressions for the sanitize build (LSAN_OPTIONS=suppressions=<this file>; the sanitize test preset
 # and build.yml's sanitizer job set it). Each names a library of the system's whose own allocations it leaves behind,
-# never the game's, the toolkit's or RtAudio's code: a leak is suppressed only when such a library is on its stack.
+# never the game's or the toolkit's code: a leak is suppressed only when such a library is on its stack.
 #
-# PipeWire's ALSA plugin: RtAudio's ALSA back end lists the devices through snd_ctl_open, which on a PipeWire desktop
+# PipeWire's ALSA plugin: the toolkit's ALSA back end lists the devices through snd_ctl_open, which on a PipeWire desktop
 # loads libasound_module_ctl_pipewire, whose context loads PipeWire's modules and keeps what they allocate after
 # snd_ctl_close (seen on Linux Mint 22's PipeWire 1.0).
 leak:libpipewire-0.3.so

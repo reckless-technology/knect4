@@ -1,6 +1,3 @@
 # ThreadSanitizer's suppressions for the tsan build (TSAN_OPTIONS=suppressions=<this file>; the tsan test preset and
-# build.yml's ThreadSanitizer job set it). None: the race RtAudio 6.0.1's ALSA back end had on its stream's state, its
-# callback thread reading it unlocked while another thread wrote it, is patched out by the toolkit as RtAudio is
-# unpacked (external/reckless-toolkit/cmake/PatchRtAudioAlsaThreads.cmake). A suppression added here is race_top,
-# matched against the racing access's own function alone, so a race in code it calls - the game's audio callback
-# among it - is still reported.
+# build.yml's ThreadSanitizer job set it). None. A suppression added here is race_top, matched against the racing
+# access's own function alone, so a race in code it calls - the game's audio callback among it - is still reported.
