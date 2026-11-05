@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
@@ -27,7 +28,9 @@ enum class Loop
                  ///< client's outputs wired to its own inputs
     kCorrelated, ///< the output comes back through a mixer - WASAPI's loopback capture of the endpoint's mix - the
                  ///< same signal at some gain and some delay
-    kKnownInput  ///< the input carries what the device makes itself: the ASIO test driver's sine and sawtooth
+    kKnownInput, ///< the input carries what the device makes itself: the ASIO test driver's sine and sawtooth
+    kCable       ///< the output comes back on the device's own inputs through a cable a person patched: through the
+                 ///< converters, the same signal at some gain, as late as the latency the API reports and two blocks
 };
 
 /** How the test device is made to report an overrun or underrun to a running stream. */
@@ -48,10 +51,16 @@ struct TestDevice
     std::string engine_input;         ///< the input the engine's test opens; empty for none
     bool        engine_key{true};     ///< whether the engine's key bus may take the inputs past the main pair
     int         channels{2};          ///< the channels each way a stream opens
+    int         first_output{0};      ///< the output device's first channel a stream opens, counted from 0
+    int         first_input{0};       ///< the input device's first channel a stream opens, counted from 0
     int         sample_rate{48000};   ///< the rate a stream opens at, in hertz
     int         block_size{256};      ///< the block a stream opens at, in samples
     Loop        loop{Loop::kNone};    ///< what a stream can show of the samples it carried
     double      rate_tolerance{0.03}; ///< how far the rate by the clock may stray, as a fraction
+    /** How long a stream on the device runs before what it carries is judged, in seconds. A USB interface on Linux
+        has its clock set and started afresh with every stream, and takes about a second to settle into it (a
+        UMC1820 at 96 kHz brought a cable's noise back filtered to 0.96 to 0.99, with no xrun, until it did). */
+    double settle_seconds{0.0};
     /** The device's clock a thread of the machine's, timed without real-time priority (JACK's dummy driver: a runner
         gives jackd none): the machine's load delays its cycles, and a cycle that comes past its time is an xrun the
         driver starts its schedule again after, the time lost. Such xruns and the time they lose are the machine's, not
@@ -60,8 +69,78 @@ struct TestDevice
     bool        is_scheduler_timed{false}; ///< whether the device's clock is a thread of the machine's, as above
     XrunBy      xrun_by{XrunBy::kNothing}; ///< how the device is made to report an xrun
     std::string no_xrun;                   ///< for XrunBy::kNothing: why an xrun cannot reach the callback
-    std::string about;                     ///< what the device is, printed with the tables
+    /** Whether what the API reports accounts for the whole path a cable measures. Where it does, a cable's round trip
+        is held to two blocks and the reported latency within a 64th of a second. Where it does not - Windows Audio's
+        shared mode, whose GetStreamLatency leaves out the audio engine's own mixing path - the round trip is held only
+        to being no sooner than what is reported, and the shortfall is printed rather than judged. */
+    bool        does_report_whole_round_trip{true};
+    std::string partial_latency; ///< for the above being false: what the API leaves out of the figure it reports
+    std::string about;           ///< what the device is, printed with the tables
 };
+
+/** The text with the spaces and tabs at either end taken off.
+    @param text  the text
+    @return      the text trimmed; empty where it is nothing but spaces */
+inline std::string Trim(const std::string &text)
+{
+    const auto first = text.find_first_not_of(" \t");
+    const auto last  = text.find_last_not_of(" \t");
+    return first == std::string::npos ? std::string() : text.substr(first, last - first + 1);
+}
+
+/** An environment variable's value, trimmed; empty where it is not set.
+    @param name  the variable's name
+    @return      its value, or empty */
+inline std::string Environment(const char *name)
+{
+    // MSVC deprecates getenv for _dupenv_s, whose copy a test has no use for.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+    const char *text = std::getenv(name);
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+    return text != nullptr ? Trim(std::string(text)) : std::string();
+}
+
+/** A cable a person patched, as every rig's loop variable names it: "<output>:<input>", the first of two output
+    channels and the first of two inputs, counted from 1 - "3:1" for outputs 3 and 4 into inputs 1 and 2. It makes the
+    device's loop a cable's, so the stream, loop and silence tests run duplex through it.
+
+    One parser for CoreAudio's, Windows Audio's, ASIO's and ALSA's rigs: the variable's name differs, nothing else does.
+
+    @param device           the test device, whose channels, first channel each way, loop and description it sets
+    @param cable            the variable's value
+    @param output_channels  the output device's channels, which the pair must be within
+    @param input_channels   the input device's channels, which the pair must be within
+    @param variable         the variable's name, for the description and the reason it is refused
+    @return                 true where the cable was applied; false with `device.missing` set where it names no such
+                            pair, `device.found` cleared */
+inline bool ApplyCable(TestDevice &device, const std::string &cable, int output_channels, int input_channels,
+                       const char *variable)
+{
+    const auto colon        = cable.find(':');
+    const int  first_output = colon == std::string::npos ? 0 : std::atoi(cable.substr(0, colon).c_str());
+    const int  first_input  = colon == std::string::npos ? 0 : std::atoi(cable.substr(colon + 1).c_str());
+    if (first_output < 1 || first_input < 1 || first_output + 1 > output_channels || first_input + 1 > input_channels)
+    {
+        device.found   = false;
+        device.missing = std::string(variable) + " is '" + cable +
+                         "': it names two outputs and two inputs the devices have as \"<output>:<input>\", counted "
+                         "from 1 - \"3:1\" for outputs 3 and 4 into inputs 1 and 2";
+        return false;
+    }
+    device.channels     = 2;
+    device.first_output = first_output - 1;
+    device.first_input  = first_input - 1;
+    device.loop         = Loop::kCable;
+    device.about        = "outputs " + std::to_string(first_output) + " and " + std::to_string(first_output + 1) +
+                          " patched by cable to inputs " + std::to_string(first_input) + " and " +
+                          std::to_string(first_input + 1) + " (" + variable + "), " + device.about;
+    return true;
+}
 
 /** One API's test device: found, made, wired, and made to fail. Message thread throughout. */
 class DeviceRig
@@ -124,12 +203,12 @@ std::unique_ptr<DeviceRig> MakeJackRig();
 std::unique_ptr<DeviceRig> MakeAsioRig();
 
 /** The rig of one of Windows Audio's modes, made in WasapiRig.cpp.
-    @param exclusive  true for the exclusive mode, output only; false for the shared and low-latency modes
+    @param exclusive  true for the exclusive mode, output only; false for the shared mode
     @return           the rig */
 std::unique_ptr<DeviceRig> MakeWasapiRig(bool exclusive);
 
-/** Windows with the ASIO test driver: the registry views the binary gave RtAudio's driver list as it was built, put
-    back; elsewhere nothing. Called first thing in main (AsioRig.cpp says why). */
+/** Windows with the ASIO test driver: the registry views the binary gave the ASIO back end's driver list as it was
+   built, put back; elsewhere nothing. Called first thing in main (AsioRig.cpp says why). */
 void FinishAsioRegistration();
 
 /** What the ASIO test driver's registration did, for the header the suite prints; empty where there is none.
@@ -167,6 +246,37 @@ class PrivateAggregate
 
   private:
     std::uint32_t device_{0}; ///< the aggregate's AudioObjectID; 0, kAudioObjectUnknown, for none
+    std::string   why_;
+};
+
+/** A CoreMIDI source of the test's own (MidiSourceMac.cpp): a virtual source on MIDI 1.0's protocol, under the name it
+    is made with, listed while the object lives, which sends Universal MIDI Packets to whoever is connected to it. */
+class PrivateMidiSource
+{
+  public:
+    explicit PrivateMidiSource(const std::string &name);
+    ~PrivateMidiSource();
+
+    PrivateMidiSource(const PrivateMidiSource &)            = delete;
+    PrivateMidiSource &operator=(const PrivateMidiSource &) = delete;
+
+    bool made() const noexcept
+    {
+        return source_ != 0;
+    }
+
+    /** Why none was made. */
+    const std::string &why() const noexcept
+    {
+        return why_;
+    }
+
+    /** One Universal MIDI Packet of `count` words sent at once. */
+    void Send(const std::uint32_t *words, int count);
+
+  private:
+    std::uint32_t client_{0}; ///< the MIDIClientRef the source is made on; 0 for none
+    std::uint32_t source_{0}; ///< the MIDIEndpointRef; 0 for none
     std::string   why_;
 };
 #endif

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Every product built on the toolkit, configured on this checkout of it: vst-plugins, Reckless IR Capture, Reckless
-# Amphitheater, Knect 4 and Reckless Sudoku, each at the head of its default branch with this toolkit in place of the
+# Amphitheater, Knect 4, Reckless Sudoku and Sentinel, each at the head of its default branch with this toolkit in place of the
 # commit it pins, configured as its own CI configures it and a few of its targets built. A toolkit change that clashes
 # with a product - a target, a CTest or an option of the same name, an include a product's header shadows, a header or a
 # function a product calls that moved - fails here, on the toolkit's pull request, rather than at the product's next
@@ -27,12 +27,17 @@ fetch=$(cd "$2" && pwd)
 python=$3
 jobs=${JOBS:-$(nproc 2> /dev/null || sysctl -n hw.ncpu)}
 
-# product | default branch | deploy key's variable | configure arguments | targets built
+# product | default branch | deploy key's variable | public or private | configure arguments | targets built
+#
+# A public consumer is cloned over https and needs no key. A private one is read through its own read-only deploy
+# key, whose private half is this repository's secret - and a fork's pull request is given no secrets, so from a
+# fork it cannot be read at all and is skipped rather than failed (below).
 products=(
-    "vst-plugins|main|CONSUMER_VST_PLUGINS_DEPLOY_KEY|-DCMAKE_BUILD_TYPE=Release|reckless_update_shared reckless_plugin_view_test ir_capture_ui"
-    "amphitheater-chess|main|CONSUMER_AMPHITHEATER_DEPLOY_KEY|-DCMAKE_BUILD_TYPE=Release -DAMPHITHEATER_BUILD_TESTS=ON|amphitheater_gui"
-    "knect4|main|CONSUMER_KNECT4_DEPLOY_KEY|-DCMAKE_BUILD_TYPE=Release -DKNECT4_BUILD_TESTS=ON|knect4_gui"
-    "sudoku|main|CONSUMER_SUDOKU_DEPLOY_KEY|-DCMAKE_BUILD_TYPE=Release -DSUDOKU_BUILD_TESTS=ON|sudoku_gui"
+    "vst-plugins|main|CONSUMER_VST_PLUGINS_DEPLOY_KEY|private|-DCMAKE_BUILD_TYPE=Release|reckless_update_shared reckless_plugin_view_test ir_capture_ui"
+    "amphitheater-chess|main|CONSUMER_AMPHITHEATER_DEPLOY_KEY|public|-DCMAKE_BUILD_TYPE=Release -DAMPHITHEATER_BUILD_TESTS=ON|amphitheater_gui"
+    "knect4|main|CONSUMER_KNECT4_DEPLOY_KEY|public|-DCMAKE_BUILD_TYPE=Release -DKNECT4_BUILD_TESTS=ON|knect4_gui"
+    "sudoku|main|CONSUMER_SUDOKU_DEPLOY_KEY|public|-DCMAKE_BUILD_TYPE=Release -DSUDOKU_BUILD_TESTS=ON|sudoku_gui"
+    "sentinel|main|CONSUMER_SENTINEL_DEPLOY_KEY|private|-DCMAKE_BUILD_TYPE=Release|Sentinel"
 )
 
 key_dir=$(mktemp -d)
@@ -41,7 +46,16 @@ trap 'rm -rf "$key_dir"' EXIT
 failed=()
 summary=()
 for entry in "${products[@]}"; do
-    IFS='|' read -r product branch key_variable configure targets <<< "$entry"
+    IFS='|' read -r product branch key_variable visibility configure targets <<< "$entry"
+    # A private consumer with no key: from a fork's pull request, where GitHub passes no secrets. Skipped and
+    # said so, rather than failed on a clone that cannot succeed; the public consumers below still run, so an
+    # outside contributor's change is still held to three of the four.
+    if [ "$visibility" = private ] && [ -z "${!key_variable:-}" ]; then
+        echo "::notice::$product is private and this run has no key for it (a fork's pull request is given none);" \
+            "skipped - the public consumers are still checked"
+        summary+=("$product: skipped, no key for a private consumer")
+        continue
+    fi
     source_dir="$work/src/$product"
     build_dir="$work/build/$product"
     echo "::group::$product: the head of $branch, on this toolkit"
@@ -53,7 +67,7 @@ for entry in "${products[@]}"; do
         # A private consumer is read through its own read-only deploy key, whose private half is this repository's
         # secret; a public one needs none and is cloned over https, which is what a checkout with no key can do.
         # Amphitheater, Knect 4 and Sudoku went public and GPL on 2026-10-24 and have no key any more; vst-plugins
-        # is private and keeps one.
+        # and Sentinel are private and keep one each.
         key="${!key_variable:-}"
         if [ -n "$key" ]; then
             (umask 077; printf '%s\n' "$key" > "$key_dir/$product")
