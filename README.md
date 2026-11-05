@@ -109,8 +109,8 @@ cmake --build --preset release
 `xvfb-run -a ctest --preset release -L window` gives it where there is none. The `sanitize` preset builds everything
 under AddressSanitizer and UndefinedBehaviorSanitizer, the `tsan` preset under ThreadSanitizer (gcc or clang, Linux or
 macOS); each has a build and a test preset of the same name. The `sanitize` test preset leaves out the leaks of the
-system's PipeWire ALSA plugin, which the audio suite reaches through RtAudio (`tools/lsan_suppressions.txt`), and the
-`tsan` test preset the race RtAudio's ALSA back end has on its own stream's state (`tools/tsan_suppressions.txt`).
+system's PipeWire ALSA plugin, which the audio suite reaches through the toolkit's ALSA back end
+(`tools/lsan_suppressions.txt`); the `tsan` test preset suppresses nothing (`tools/tsan_suppressions.txt`).
 
 ### Building on macOS
 
@@ -219,7 +219,7 @@ Knect 4's own code is under the GNU General Public License version 3 or later (`
 Jonny Reckless, who holds every line of it and so licenses it as he chooses. Its window builds on reckless-toolkit,
 which is Jonny's too: the game core - its rules, search and the drop's feel - builds and tests with
 `-DKNECT4_GUI=OFF`, which leaves the toolkit out. The third-party parts the
-executable contains (Skia with libpng, zlib and, on Linux, FreeType; RtAudio and RtMidi; Noto Serif) are listed with
+executable contains (Skia with libpng, zlib and, on Linux, FreeType; Noto Serif) are listed with
 their licences in `THIRD-PARTY-NOTICES.txt`, which every package installs and the executable carries.
 
 ## History

@@ -3,7 +3,7 @@ description: >
   An audio output for the suites that open the machine's own (ClickPlayer's), on a hosted Linux runner, which has no
   sound card and whose kernel carries no ALSA dummy driver: PulseAudio started for the job's user with a null sink, and
   ALSA's default device and control made PulseAudio's through its ALSA plugin - as a desktop's ALSA default is its
-  sound server's. RtAudio's ALSA back end lists the default device and runs on it as on a card: its callback thread
+  sound server's. The toolkit's ALSA back end lists the default device and runs on it as on a card: its callback thread
   started, the stream started, stopped and closed, so the sanitizers see it.
 runs:
   using: composite

@@ -7,12 +7,10 @@ under its own licence, which this file reproduces wherever the licence asks for 
 Where each part is used
 
    1. Noto Serif 2.015                             Knect 4
-   2. RtAudio 6.0.1                                Knect 4
-   3. RtMidi 6.0.0                                 Knect 4
-   4. Skia m144                                    Knect 4
-   5. libpng 1.6.51                                Knect 4
-   6. zlib 1.3.0.1-motley                          Knect 4
-   7. FreeType 2.13.3                              Knect 4 on Linux
+   2. Skia m144                                    Knect 4
+   3. libpng 1.6.51                                Knect 4
+   4. zlib 1.3.0.1-motley                          Knect 4
+   5. FreeType 2.13.3                              Knect 4 on Linux
 
 ====================================================================================================
 1. Noto Serif 2.015
@@ -117,80 +115,7 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ====================================================================================================
-2. RtAudio 6.0.1
-Used in: Knect 4
-====================================================================================================
-
-Knect 4 plays its clicks through RtAudio, by way of the toolkit's audio device layer. Modified, as
-the build fetches it: its ALSA back end, compiled on Linux, stops a device on an xrun, its stop
-threshold the buffer's size where it was past the boundary, and starts a duplex stream's playback on
-a buffer of silence; and its ASIO back end, which Knect 4 does not compile, hands the driver a
-bufferSwitchTimeInfo callback where it left a null pointer - the fix the project made after this
-release.
-
-RtAudio: a set of realtime audio i/o C++ classes
-Copyright (c) 2001-2023 Gary P. Scavone
-
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation files
-(the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-Any person wishing to distribute modifications to the Software is
-asked to send the modifications to the original developer so that
-they can be incorporated into the canonical version.  This is,
-however, not a binding provision of this license.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR
-ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
-CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-====================================================================================================
-3. RtMidi 6.0.0
-Used in: Knect 4
-====================================================================================================
-
-Linked with RtAudio in the toolkit's audio device layer.
-
-RtMidi: realtime MIDI i/o C++ classes
-Copyright (c) 2003-2023 Gary P. Scavone
-
-Permission is hereby granted, free of charge, to any person
-obtaining a copy of this software and associated documentation files
-(the "Software"), to deal in the Software without restriction,
-including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software,
-and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice and this permission notice shall be
-included in all copies or substantial portions of the Software.
-
-Any person wishing to distribute modifications to the Software is
-asked to send the modifications to the original developer so that
-they can be incorporated into the canonical version.  This is,
-however, not a binding provision of this license.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR
-ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
-CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
-WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-====================================================================================================
-4. Skia m144, skia-pack m144-e2e6623374-4
+2. Skia m144, skia-pack m144-e2e6623374-4
 Used in: Knect 4
 ====================================================================================================
 
@@ -198,7 +123,7 @@ Knect 4 draws its window through Skia m144, linked from the prebuilt static libr
 skia-pack release m144-e2e6623374-4, built from Skia's commit
 e2e66233743d048dc880203b6598fd34d94d9765. It holds Skia's own code - its raster renderer, its colour
 management (skcms) and its PNG decoder - and, of the libraries the release bundles, libpng and zlib
-(sections 5 and 6), and on Linux FreeType (section 7), which draws the text there; it declines every
+(sections 3 and 4), and on Linux FreeType (section 5), which draws the text there; it declines every
 other image decoder, so no other bundled library is linked.
 
 Skia's licence, the LICENSE file of its source tree at that commit, which skcms, a part of the same
@@ -235,7 +160,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ====================================================================================================
-5. libpng 1.6.51, in Skia
+3. libpng 1.6.51, in Skia
 Used in: Knect 4
 ====================================================================================================
 
@@ -375,7 +300,7 @@ this source code in a product, acknowledgment is not required but would
 be appreciated.
 
 ====================================================================================================
-6. zlib 1.3.0.1-motley, in Skia
+4. zlib 1.3.0.1-motley, in Skia
 Used in: Knect 4
 ====================================================================================================
 
@@ -433,7 +358,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ====================================================================================================
-7. FreeType 2.13.3, in Skia
+5. FreeType 2.13.3, in Skia
 Used in: Knect 4 on Linux
 ====================================================================================================
 
