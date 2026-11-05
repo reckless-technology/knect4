@@ -19,7 +19,7 @@ the notices are the same from any build tree; a licence file the pack gains stop
     python3 tools/third_party_notices.py <build-dir> --check   exits 1 if the committed file is not what it writes
                                                                (CTest notices)
 
-Any build tree with the window on can write the notices or check them. Run it when the submodule moves, and read the
+Any build tree with the window on can write the notices or check them. Run it when the toolkit is pulled, and read the
 diff. Any Python 3 runs it, with nothing installed.
 """
 import re

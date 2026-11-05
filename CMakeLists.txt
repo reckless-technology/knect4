@@ -10,7 +10,7 @@ endif()
 
 # Knect 4: four in a row against the computer or between two people. The game's rules, evaluation and search (src/game) and the drop's
 # motion and click (src/effects) need nothing else; the window (src/app) is drawn with Skia on reckless-toolkit, a git
-# submodule at external/reckless-toolkit, and plays its clicks through the toolkit's audio device layer.
+# subtree at external/reckless-toolkit, and plays its clicks through the toolkit's audio device layer.
 
 # The oldest macOS the Mac binary runs on, set before project(): 13.3, the floor every Reckless product shares.
 if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
@@ -42,7 +42,7 @@ if(MSVC)
 endif()
 
 option(KNECT4_BUILD_TESTS "Build the test suites" ON)
-option(KNECT4_GUI "Build the window on the toolkit submodule (external/reckless-toolkit)" ON)
+option(KNECT4_GUI "Build the window on the toolkit, a subtree at external/reckless-toolkit" ON)
 option(KNECT4_COVERAGE "Instrument the game's own code for coverage (gcc, clang or clang-cl)" OFF)
 option(KNECT4_SANITIZE "Build everything with AddressSanitizer and UndefinedBehaviorSanitizer (gcc or clang)" OFF)
 option(KNECT4_TSAN "Build everything with ThreadSanitizer (gcc or clang)" OFF)
@@ -131,9 +131,10 @@ endif()
 
 if(KNECT4_GUI)
     if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/reckless-toolkit/CMakeLists.txt")
-        message(FATAL_ERROR "The window is built on the toolkit, a git submodule at external/reckless-toolkit, which this "
-                            "checkout does not hold. Fetch it with 'git submodule update --init', or build the game and "
-                            "its suites alone with -DKNECT4_GUI=OFF.")
+        message(FATAL_ERROR "The window is built on the toolkit, a git subtree committed at external/reckless-toolkit, "
+                            "which is missing: the checkout is broken or partial, since every commit carries the "
+                            "toolkit's files and a clone needs nothing after it. Clone or check out again, or build "
+                            "the game and its suites alone with -DKNECT4_GUI=OFF.")
     endif()
     # The toolkit's options, as normal variables before it is added: its windowed parts and its audio device layer on
     # (the click), its own suites off, and no ASIO - a game's click goes to the system's own output.
