@@ -50,13 +50,24 @@ cat > "$pkg/usr/share/doc/knect4/copyright" <<COPYRIGHT
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: Knect 4
 Upstream-Contact: Jonny Reckless <hello@recklesstechnology.com>
-Source: https://recklesstechnology.com
+Source: https://github.com/reckless-technology/knect4
+Comment: The third-party parts the game contains are used under the licences
+ /usr/share/doc/knect4/THIRD-PARTY-NOTICES.txt reproduces.
 
 Files: *
 Copyright: 2014-2026 Jonny Reckless
 License: GPL-3.0-or-later
- The text is /usr/share/doc/knect4/LICENSE.txt. The third-party parts the game contains are used under the licences
- /usr/share/doc/knect4/THIRD-PARTY-NOTICES.txt reproduces.
+
+License: GPL-3.0-or-later
+ This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+ License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
+ version.
+ .
+ This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+ warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ .
+ The licence's full text is in /usr/share/doc/knect4/LICENSE.txt; on Debian systems it is also in
+ /usr/share/common-licenses/GPL-3.
 COPYRIGHT
 chmod 0644 "$pkg/usr/share/doc/knect4/copyright"
 
