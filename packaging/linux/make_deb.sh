@@ -15,13 +15,15 @@
 # SOURCE_DATE_EPOCH's or the last commit's, so one stage makes one package. Its Depends is read off the binary: every
 # library it needs (objdump -p) found where the loader finds it and named by the package that owns it (dpkg -S), libc6
 # at the highest GLIBC_ version it asks for and libstdc++6 at the highest GLIBCXX_ - a library no package owns stops it.
+# Its Recommends names what the game loads or runs only when it needs it, which that scan cannot see: libcurl, loaded by
+# name for the update check, and xdg-utils, whose xdg-open shows the download page.
 # Removing it takes its own files alone: dpkg removes a folder it shares with another product's package -
 # /opt/reckless-technology/bin among them - only once nothing is left in it.
 #
 #   packaging/linux/make_deb.sh <dist-dir> <version> <out.deb>
 set -euo pipefail
 
-[ $# -eq 3 ] || { sed -n '2,20p' "$0" >&2; exit 2; }
+[ $# -eq 3 ] || { sed -n '2,23p' "$0" >&2; exit 2; }
 dist=$(cd "$1" && pwd)
 version=$2
 out=$3
@@ -114,6 +116,7 @@ Architecture: amd64
 Maintainer: Jonny Reckless <hello@recklesstechnology.com>
 Installed-Size: $size
 Depends: $depends
+Recommends: libcurl4t64 | libcurl4 | libcurl3t64-gnutls | libcurl3-gnutls, xdg-utils
 Section: games
 Priority: optional
 Homepage: https://recklesstechnology.com

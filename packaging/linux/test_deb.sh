@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# The Debian package held to the stage it was made from, with no root and nothing installed: its control fields, every
-# staged file byte for byte at its place with its mode, its copyright file (GPL-3.0-or-later, its Source this
-# repository), the menu entry (desktop-file-validate where it is installed) and the icon, its md5sums, nothing outside
-# its own files, and every library the binary needs owned by a package its Depends names.
+# The Debian package held to the stage it was made from, with no root and nothing installed: its control fields (its
+# Recommends libcurl and xdg-utils), every staged file byte for byte at its place with its mode, its copyright file
+# (GPL-3.0-or-later, its Source this repository), the menu entry (desktop-file-validate where it is installed) and the
+# icon, its md5sums, nothing outside its own files, and every library the binary needs owned by a package its Depends
+# names.
 #
 #   packaging/linux/test_deb.sh <dist-dir> <version> <deb>
 set -euo pipefail
 
-[ $# -eq 3 ] || { sed -n '2,7p' "$0" >&2; exit 2; }
+[ $# -eq 3 ] || { sed -n '2,8p' "$0" >&2; exit 2; }
 dist=$(cd "$1" && pwd)
 version=$2
 deb=$3
@@ -23,6 +24,9 @@ field() { dpkg-deb --field "$deb" "$1"; }
 [ "$(field Architecture)" = amd64 ] || fail "Architecture is $(field Architecture)"
 depends=$(field Depends)
 echo "Depends: $depends"
+recommends="libcurl4t64 | libcurl4 | libcurl3t64-gnutls | libcurl3-gnutls, xdg-utils"
+[ "$(field Recommends)" = "$recommends" ] || fail "Recommends is $(field Recommends), not $recommends"
+echo "control:" && dpkg-deb --field "$deb" | sed 's/^/    /'
 
 dpkg-deb --raw-extract "$deb" "$work/x"
 x="$work/x"
