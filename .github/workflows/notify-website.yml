@@ -1,0 +1,35 @@
+# Wakes the website when a Knect 4 release is published.
+#
+# Knect 4 publishes its draft release in place (`gh release edit vX.Y.Z --draft=false --latest`), which fires
+# `release: published`. The website builds its download page and update manifest from the newest public release, but
+# only when its `pages.yml` runs; this sends it the `knect4-release` repository_dispatch it accepts, so the new
+# version shows at once rather than at the website's daily run, which stays the fallback if this fails or is skipped.
+#
+# Needs the secret WEBSITE_DISPATCH_TOKEN: a fine-grained personal access token with Contents: write on
+# reckless-technology/website only. The built-in GITHUB_TOKEN cannot dispatch to another repository, which is why a
+# token of its own is needed. `workflow_dispatch` fires it by hand.
+name: Notify website
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  notify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: The website told
+        env:
+          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::the secret WEBSITE_DISPATCH_TOKEN is not set; add it to this repository (Settings > Secrets and variables > Actions) as a fine-grained token with Contents write on reckless-technology/website. The website's daily run will pick the release up meanwhile."
+            exit 1
+          fi
+          gh api repos/reckless-technology/website/dispatches -f event_type=knect4-release
+          echo "the website was sent knect4-release"
