@@ -24,11 +24,11 @@ jobs:
     steps:
       - name: The website told
         env:
-          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.PUBLIC_RELEASES_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "$GH_TOKEN" ]; then
-            echo "::error::the secret WEBSITE_DISPATCH_TOKEN is not set; add it to this repository (Settings > Secrets and variables > Actions) as a fine-grained token with Contents write on reckless-technology/website. The website's daily run will pick the release up meanwhile."
+            echo "::error::the organisation secret PUBLIC_RELEASES_TOKEN is not set or not visible to this repository; it is a fine-grained token of Jonny's with Contents read and write on website and the public release repositories (organisation Settings > Secrets and variables > Actions). The website's daily run will pick the release up meanwhile."
             exit 1
           fi
           gh api repos/reckless-technology/website/dispatches -f event_type=knect4-release
