@@ -5,8 +5,8 @@
 # only when its `pages.yml` runs; this sends it the `knect4-release` repository_dispatch it accepts, so the new
 # version shows at once rather than at the website's daily run, which stays the fallback if this fails or is skipped.
 #
-# Needs the secret WEBSITE_DISPATCH_TOKEN: a fine-grained personal access token with Contents: write on
-# reckless-technology/website only. The built-in GITHUB_TOKEN cannot dispatch to another repository, which is why a
+# Needs the organisation secret PUBLIC_RELEASES_TOKEN (visible to all repositories): a fine-grained token of Jonny's
+# with Contents read and write on website and the public release repositories. The built-in GITHUB_TOKEN cannot dispatch to another repository, which is why a
 # token of its own is needed. `workflow_dispatch` fires it by hand.
 name: Notify website
 
