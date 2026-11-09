@@ -1,6 +1,7 @@
 #pragma once
 /// @file about_view.h Help > About Knect 4: a card over the window with the game's name, version and copyright, its
-/// licence (GPLv3) and the notices of the third-party parts the program carries, read from the files it embeds.
+/// licence (GPLv3 or later) and the notices of the third-party parts the program carries, read from the files it
+/// embeds.
 
 #include "Button.h"
 #include "TextView.h"

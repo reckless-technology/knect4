@@ -57,8 +57,8 @@ AboutView::AboutView(std::string version, std::string licence, std::string notic
     if (text.empty())
     {
         // A build that carries neither file: where the reader finds them.
-        text = "The licence (GPLv3) and the third-party notices are in LICENSE and THIRD-PARTY-NOTICES.txt, installed "
-               "beside the game and in its source.";
+        text = "The licence (GPLv3 or later) and the third-party notices are in LICENSE and THIRD-PARTY-NOTICES.txt, "
+               "installed beside the game and in its source.";
     }
     text_->SetText(text);
     AddChild(*text_);
@@ -95,7 +95,7 @@ void AboutView::Paint(reckless::gfx::Canvas &c)
                reckless::gfx::Justify::kCentredLeft, true);
     c.SetFont(fonts::Small());
     c.SetColor(theme::kMuted);
-    c.DrawText("Version " + version_ + "  ·  © 2014–2026 Jonny Reckless  ·  GPLv3",
+    c.DrawText("Version " + version_ + "  ·  © 2014–2026 Jonny Reckless  ·  GPLv3 or later",
                RectF{card.x() + 118.0f, card.y() + 56.0f, card.width() - 140.0f, 22.0f},
                reckless::gfx::Justify::kCentredLeft, true);
 }
