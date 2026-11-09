@@ -107,14 +107,17 @@ configure_file(cmake/version.h.in "${PROJECT_BINARY_DIR}/generated/version.h" @O
 
 if(KNECT4_BUILD_TESTS)
     enable_testing()
-    # GoogleTest, pinned by its release tarball's hash.
+    # GoogleTest, pinned by its release tarball's hash, fetched through the toolkit's helper that tries a transient
+    # failure (an HTTP 429 or 5xx, a reset connection) again. Included by path, since this runs before the toolkit is
+    # added and with -DKNECT4_GUI=OFF it never is; the subtree is in every checkout all the same.
     include(FetchContent)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/external/reckless-toolkit/cmake/RecklessDownload.cmake")
     set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(googletest
-        URL      https://github.com/google/googletest/archive/refs/tags/v1.17.0.tar.gz
-        URL_HASH SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c)
+    reckless_fetch_content(googletest
+        https://github.com/google/googletest/archive/refs/tags/v1.17.0.tar.gz
+        65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c)
     FetchContent_MakeAvailable(googletest)
     include(GoogleTest)
     # googletest compiles its own two libraries under its own strict set (/WX on clang-cl), where clang 21's
