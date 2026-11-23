@@ -44,7 +44,7 @@ repository, the game's own code Jonny Reckless's and under the GNU General Publi
 
 - File and directory names are lower_snake_case (Jonny's rule for every repository); classes PascalCase, members
   `snake_case_`, constants `kPascalCase`, booleans `is`/`has`/`does`/`may`, names spelled out; `/** */` on
-  declarations with `@param`/`@return`; British spelling in comments and documents.
+  declarations with `@param`/`@return`; American spelling in comments, documents and identifiers.
 - clang-format 22.1.8 only (the pre-commit hook and CI check it).
 - Every commit authored and committed as `Jonny Reckless <jonny@recklesstechnology.com>`
   (`git config core.hooksPath .githooks` installs the hooks that check it). Work on a branch, open a pull request, merge
