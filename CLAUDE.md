@@ -7,6 +7,14 @@ Knect 4, against the computer or between two people at one board, C++20, its win
 repository, the game's own code Jonny Reckless's and under the GNU General Public License version 3 or later
 (`LICENSE`); the game core also builds alone with `-DKNECT4_GUI=OFF`, which leaves the toolkit out.
 
+## Parent: claude-skills
+
+This repository inherits its working practice from the private `reckless-technology/claude-skills` repository (cloned at
+`~/work/claude-skills`; its `workspace/CLAUDE.md` is the cross-repo guide and its skills are linked into
+`~/.claude/skills`). Load the `reckless-working-practice` skill before committing, formatting, testing or installing
+anything here. This file holds only what is specific to this repository; where it differs from the parent, it wins
+here. Skills that apply here: `reckless-working-practice`, `reckless-app`, `reckless-releases`.
+
 ## Layout
 
 - `src/game/` (`knect4_game`): `Game` (the board the window shows, and the rules), `BasicPosition` (bitboards in a
